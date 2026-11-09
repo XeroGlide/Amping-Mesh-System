@@ -1,0 +1,2374 @@
+<!-- Elementor Optimized Emergency Mesh App - Registration Flow Only -->
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js"></script>
+
+    <!-- Google Maps API (Now includes the 'places' library for the search bar) -->
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDMQjzfGM8GWeDktjuIbYbFAc_lMZ3GjnQ&libraries=places"></script>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+
+        html, body {
+            margin: 0 !important; padding: 0 !important;
+            width: 100% !important; height: 100% !important;
+            overflow: hidden !important; position: fixed !important;
+            top: 0 !important; left: 0 !important;
+            background-color: #d8effa;
+        }
+
+        .hidden { display: none !important; }
+
+        /* Hide the reCAPTCHA badge + its container (Google requires the attribution text shown under Send OTP instead) */
+        .grecaptcha-badge { visibility: hidden !important; opacity: 0 !important; pointer-events: none !important; }
+        #recaptcha-container { position: absolute !important; width: 0 !important; height: 0 !important; overflow: hidden !important; margin: 0 !important; }
+        .recaptcha-note { font-size: 10px; color: #9ca3af; text-align: center; margin-top: 8px; line-height: 1.4; }
+        .recaptcha-note a { color: #9ca3af; text-decoration: underline; }
+
+        /* ==================== EXACT BACKGROUND FROM IMAGE ==================== */
+        .reg-glass-bg {
+            position: fixed !important; top: 0 !important; left: 0 !important; right: 0 !important; bottom: 0 !important;
+            width: 100% !important; height: 100% !important;
+            background-color: #d8effa !important;
+            background-image:
+                radial-gradient(circle at 60% 50%, rgba(255, 255, 255, 0.9) 0%, transparent 60%),
+                linear-gradient(135deg, #daf1fc 0%, #a2c6f2 100%) !important;
+
+            z-index: 10000; display: flex; align-items: flex-start; justify-content: center;
+            overflow-y: auto !important; overflow-x: hidden !important;
+            padding: max(20px, env(safe-area-inset-top)) max(20px, env(safe-area-inset-right)) max(20px, env(safe-area-inset-bottom)) max(20px, env(safe-area-inset-left)) !important;
+            -webkit-overflow-scrolling: touch; overscroll-behavior: contain;
+        }
+        .reg-glass-bg::-webkit-scrollbar { display: none !important; }
+
+        /* ==================== THE TWO-COLUMN WRAPPER (ANIMATED) ==================== */
+        /* Flex based: the welcome panel grows in beside the form, and the whole group stays centred at any width */
+        .app-layout-wrapper {
+            display: flex; align-items: center; justify-content: center;
+            width: 100%; max-width: 1040px;
+            margin: auto; position: relative;
+            min-height: 100%; padding: 24px 0;
+            gap: 0; transition: gap 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+        }
+
+        .layout-left {
+            flex: 0 1 460px; width: 100%; min-width: 0;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            position: relative; z-index: 2;
+        }
+
+        .layout-right {
+            flex: 0 0 0; width: 0; max-width: 0; min-width: 0; overflow: hidden;
+            display: flex; flex-direction: column; align-items: flex-start; justify-content: center;
+            text-align: left; opacity: 0; pointer-events: none;
+            align-self: center; position: sticky; top: 24px;
+            transition: max-width 0.8s cubic-bezier(0.22, 1, 0.36, 1), flex-basis 0.8s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.8s ease 0.15s;
+        }
+
+        .app-layout-wrapper.is-split { gap: clamp(28px, 5vw, 72px); }
+        .app-layout-wrapper.is-split .layout-right { flex: 1 1 0; width: auto; max-width: 440px; opacity: 1; pointer-events: auto; }
+
+        /* Right Column Typography */
+        .layout-right img { width: 90px; max-width: 100%; margin-bottom: 25px; filter: drop-shadow(0 10px 15px rgba(0, 114, 255, 0.15)); }
+        .layout-right h1 { color: #0b3b60; font-size: clamp(24px, 3vw, 34px); font-weight: 800; line-height: 1.25; margin: 0 0 15px 0; letter-spacing: -0.5px; }
+        .layout-right p { color: #0072ff; font-size: 16px; font-weight: 600; margin: 0; }
+
+        /* ==================== CARD STYLE (PURE WHITE) ==================== */
+        .reg-glass-card {
+            background: #ffffff !important; border: none !important;
+            box-shadow: 0 15px 35px rgba(0, 40, 100, 0.08) !important;
+            border-radius: 16px !important;
+            padding: 45px 35px !important;
+            width: 100% !important;
+            text-align: center; color: #1e3a5f !important;
+            position: relative;
+        }
+
+        #setupProfileStep1, #setupProfileStep2, #setupProfileStep3 { width: 100%; }
+        #setupProfileStep1 .reg-glass-card, #setupProfileStep2 .reg-glass-card, #setupProfileStep3 .reg-glass-card { padding: 40px 25px !important; }
+
+        .reg-glass-card h2 { color: #0b3b60 !important; font-size: 24px; font-weight: 700; letter-spacing: -0.5px; margin: 0 0 25px 0; }
+        .reg-glass-card p { color: #6b7280 !important; font-size: 13px; line-height: 1.5; margin: 0 0 25px 0; }
+        .reg-glass-card strong, .reg-glass-card label { color: #0b3b60 !important; }
+        .card-icon { font-size: 48px; margin-bottom: 15px; line-height: 1; display: inline-block; }
+
+        /* ==================== BUTTONS ==================== */
+        .btn-base {
+            width: 100%; border: none; border-radius: 50px !important;
+            padding: 16px; font-size: 15px; font-weight: 700; letter-spacing: 0.3px;
+            color: white; cursor: pointer; transition: all 0.3s ease;
+            display: flex; align-items: center; justify-content: center; gap: 8px;
+            margin-bottom: 14px;
+        }
+        .btn-base:hover { transform: translateY(-2px); filter: brightness(1.05); }
+        .btn-base:active { transform: scale(0.97); }
+
+        .btn-blue, .btn-green { background: linear-gradient(90deg, #00d2ff 0%, #0072ff 100%) !important; box-shadow: 0 6px 15px rgba(0, 114, 255, 0.25) !important; }
+        .btn-red { background: linear-gradient(90deg, #ff416c 0%, #ff4b2b 100%) !important; box-shadow: 0 6px 15px rgba(255, 65, 108, 0.25) !important; }
+        .btn-grey { background: #ffffff !important; color: #4b5563; border: 1px solid #d1d5db; box-shadow: 0 2px 4px rgba(0,0,0,0.02); }
+        .btn-grey:hover { background: #f9fafb !important; box-shadow: 0 4px 8px rgba(0,0,0,0.05); }
+
+        .link-text { font-size: 13px; font-weight: 600; color: #0072ff; text-decoration: none; cursor: pointer; display: inline-block; margin-top: 10px; transition: color 0.2s; }
+        .link-text:hover { color: #00d2ff; text-decoration: underline; }
+
+        /* ==================== FORM INPUTS ==================== */
+        .reg-glass-section {
+            background: #ffffff !important; border: none !important; border-radius: 12px !important;
+            padding: 10px 0 25px 0 !important; margin-bottom: 20px !important;
+        }
+        .section-title {
+            display: block; text-align: left; font-size: 11px; color: #0072ff !important;
+            text-transform: uppercase; font-weight: 800; letter-spacing: 0.8px;
+            margin-bottom: 18px; border-bottom: 1px solid #f3f4f6; padding-bottom: 8px;
+        }
+        .section-title.yellow { color: #f59e0b !important; }
+        .section-title.green { color: #10b981 !important; }
+
+        .form-label { display: block; text-align: left; font-size: 12px; font-weight: 700; color: #0b3b60; margin-bottom: 8px; margin-top: 18px; }
+        .form-label:first-child { margin-top: 0; }
+
+        .reg-glass-card input, .reg-glass-card select, .alert-modal input, .alert-modal select {
+            width: 100%; background: #ffffff !important; color: #0b3b60 !important; border: 1px solid #d1d5db !important;
+            border-radius: 8px !important; padding: 14px 16px !important; font-size: 13px !important; outline: none; transition: all 0.2s ease;
+        }
+        .reg-glass-card input:focus, .reg-glass-card select:focus, .alert-modal input:focus, .alert-modal select:focus { border-color: #00d2ff !important; box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.15) !important; }
+
+        .responsive-row { display: flex; gap: 12px; width: 100%; align-items: flex-end; }
+        .responsive-row > div { flex: 1; min-width: 0; }
+        .responsive-row .fixed-width { flex: 0 0 auto; width: 85px; }
+
+        .bday-row { display: flex; gap: 8px; width: 100%; }
+        .bday-row > select, .bday-row > input { padding: 14px 10px !important; }
+
+        .input-hint { font-size: 11px; color: #9ca3af; margin-top: 8px; text-align: center; display: block; }
+
+        /* Map Badge Button */
+        .action-badge { font-size: 11px; font-weight: 700; color: #0072ff; border: 1px solid rgba(0, 114, 255, 0.3); padding: 4px 10px; border-radius: 6px; cursor: pointer; background-color: rgba(0, 114, 255, 0.05); transition: background 0.2s; display: inline-flex; align-items: center; gap: 4px; }
+        .action-badge:hover { background-color: rgba(0, 114, 255, 0.1); }
+
+        /* ==================== CUSTOM SEARCHABLE DROPDOWN ==================== */
+        .custom-select-wrapper { position: relative; width: 100%; text-align: left; }
+        .custom-select-trigger {
+            width: 100%; background: #ffffff; color: #0b3b60; border: 1px solid #d1d5db;
+            border-radius: 8px; padding: 14px 16px; font-size: 13px; cursor: pointer;
+            display: flex; justify-content: space-between; align-items: center;
+            transition: all 0.2s ease;
+        }
+        .custom-select-trigger.active { border-color: #00d2ff; box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.15); }
+        .custom-select-menu {
+            position: absolute; top: 100%; left: 0; right: 0; background: #ffffff; z-index: 50;
+            border: 1px solid #d1d5db; border-radius: 8px; margin-top: 4px;
+            box-shadow: 0 10px 25px rgba(0,0,0,0.1);
+            max-height: 250px; overflow-y: auto; display: none;
+            flex-direction: column;
+        }
+        .custom-select-menu.open { display: flex; }
+        .custom-select-search { padding: 10px; position: sticky; top: 0; background: #ffffff; border-bottom: 1px solid #e5e7eb; }
+        .custom-select-search input {
+            width: 100%; padding: 10px; border: 1px solid #cbd5e1; border-radius: 6px;
+            outline: none; font-size: 13px; color: #0b3b60;
+        }
+        .custom-select-item { padding: 12px 16px; font-size: 13px; cursor: pointer; color: #1e3a5f; transition: background 0.1s; border-bottom: 1px solid #f1f5f9; }
+        .custom-select-item:hover { background: #e4f5f9; color: #0072ff; font-weight: 600; }
+
+        /* ==================== GOOGLE MAP MODAL OVERLAY ==================== */
+        .map-overlay {
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 59, 96, 0.6); backdrop-filter: blur(4px);
+            z-index: 99999; display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .map-overlay.active { opacity: 1; pointer-events: auto; }
+        .map-modal {
+            background: #ffffff; width: 92%; max-width: 600px; border-radius: 16px;
+            max-height: 94vh; max-height: 94dvh; display: flex; flex-direction: column;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.25); overflow: hidden;
+            transform: translateY(20px) scale(0.95); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .map-overlay.active .map-modal { transform: translateY(0) scale(1); }
+        .map-header { padding: 15px 20px; border-bottom: 1px solid #e5e7eb; display: flex; justify-content: space-between; align-items: center; }
+        .map-header h3 { margin: 0; font-size: 16px; color: #0b3b60; font-weight: 700; }
+        .map-close { cursor: pointer; font-size: 24px; color: #9ca3af; line-height: 1; }
+        .map-close:hover { color: #ef4444; }
+
+        .map-search-bar { padding: 12px 20px; background: #f8fafc; border-bottom: 1px solid #e5e7eb; }
+        .map-search-bar input { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; outline: none; color: #0b3b60; }
+        .map-search-bar input:focus { border-color: #00d2ff; box-shadow: 0 0 0 3px rgba(0, 210, 255, 0.15); }
+
+        #googleMapContainer { height: clamp(200px, 42vh, 380px); flex: 1 1 auto; min-height: 180px; width: 100%; background: #e2e8f0; z-index: 1; }
+        .pac-container { z-index: 1000001 !important; }
+
+        .map-footer { padding: 16px 20px; background: #ffffff; text-align: left; flex: 0 0 auto; overflow-y: auto; max-height: 40vh; }
+        #mapAddressResult { font-size: 13px; color: #4b5563; margin: 0 0 12px 0; min-height: 20px; }
+        .map-footer strong { color: #0b3b60; display: block; margin-bottom: 4px; }
+
+        /* ==================== CUSTOM SYSTEM ALERT MODAL ==================== */
+        .alert-overlay {
+            padding: 12px; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(11, 59, 96, 0.5); backdrop-filter: blur(5px);
+            z-index: 100000;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; pointer-events: none; transition: opacity 0.3s ease;
+        }
+        .alert-overlay.active { opacity: 1; pointer-events: auto; }
+        .alert-modal {
+            background: #ffffff; width: 90%; max-width: 380px; border-radius: 20px;
+            max-height: 92vh; max-height: 92dvh; overflow-y: auto;
+            box-shadow: 0 25px 50px rgba(0,0,0,0.25); padding: 35px 30px; text-align: center;
+            transform: translateY(20px) scale(0.95); transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .alert-overlay.active .alert-modal { transform: translateY(0) scale(1); }
+        .alert-title { color: #0b3b60; font-size: 22px; font-weight: 800; margin: 0 0 15px 0; letter-spacing: -0.5px; }
+        .alert-message { color: #4b5563; font-size: 14.5px; line-height: 1.6; margin: 0 0 25px 0; }
+        .btn-alert { display: inline-flex; width: auto; padding: 14px 40px; margin: 0; font-size: 15px; border-radius: 50px; }
+
+        /* ==================== REGISTRATION SUCCESS CARD ==================== */
+        #registrationSuccess { width: 100%; }
+        .username-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 14px; padding: 18px 16px; margin: 0 0 20px 0; }
+        .username-label { display: block; font-size: 11px; font-weight: 800; letter-spacing: 0.8px; color: #6b7280; margin-bottom: 6px; }
+        .username-value { font-size: 26px; font-weight: 900; color: #0072ff; letter-spacing: 0.3px; line-height: 1.2; word-break: break-all; }
+        .username-copy { margin-top: 10px; background: #ffffff; border: 1px solid #bfdbfe; color: #0072ff; font-size: 12px; font-weight: 700; border-radius: 50px; padding: 6px 16px; cursor: pointer; }
+        .done-details { text-align: left; border-top: 1px solid #f3f4f6; margin-bottom: 18px; }
+        .done-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 0; border-bottom: 1px solid #f3f4f6; font-size: 13px; }
+        .done-row span:first-child { color: #6b7280; flex: 0 0 auto; }
+        .done-row span:last-child { color: #0b3b60; font-weight: 700; text-align: right; word-break: break-word; }
+        .pin-reminder { background: #fffbeb; border: 1px solid #fde68a; color: #92400e; border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5; text-align: left; margin-bottom: 20px; }
+
+
+        /* Success card: always fits the screen height, no scrolling */
+        #registrationSuccess .reg-glass-card { padding: clamp(14px, 3.2dvh, 32px) 20px !important; }
+        #registrationSuccess .done-logo { width: clamp(52px, 11dvh, 96px); height: clamp(52px, 11dvh, 96px); margin: 0 auto clamp(6px, 1.6dvh, 16px) auto; }
+        #registrationSuccess .done-logo img { width: 100%; height: 100%; object-fit: contain; }
+        #registrationSuccess h2 { font-size: clamp(19px, 3.4dvh, 24px); margin-bottom: clamp(6px, 1.4dvh, 14px); }
+        #registrationSuccess p { margin-bottom: clamp(8px, 2dvh, 20px); }
+        #registrationSuccess .username-box { padding: clamp(10px, 2.2dvh, 18px) 16px; margin-bottom: clamp(10px, 2dvh, 20px); }
+        #registrationSuccess .username-value { font-size: clamp(20px, 3.8dvh, 26px); }
+        #registrationSuccess .username-box > div[style] { margin: clamp(8px, 1.6dvh, 16px) 0 !important; }
+        #registrationSuccess .username-copy { margin-top: clamp(4px, 1dvh, 10px); }
+        #registrationSuccess .pin-reminder { margin-bottom: clamp(10px, 2dvh, 20px); padding: clamp(8px, 1.4dvh, 12px) 14px; }
+        #registrationSuccess .btn-base { padding: clamp(12px, 2dvh, 16px); }
+        @media (max-height: 640px) { #registrationSuccess .pin-reminder { font-size: 11px; line-height: 1.35; } #registrationSuccess p { font-size: 12px; line-height: 1.35; } }
+
+        /* ==================== RESPONSIVE ==================== */
+        /* Laptops / short screens: tighter vertical rhythm so the card fits without endless scrolling */
+        @media (max-height: 760px) and (min-width: 901px) {
+            .app-layout-wrapper { padding: 12px 0; }
+            .reg-glass-card { padding: 32px 30px !important; }
+            #setupProfileStep1 .reg-glass-card, #setupProfileStep2 .reg-glass-card, #setupProfileStep3 .reg-glass-card { padding: 28px 24px !important; }
+        }
+        /* Tablets & phones: single column, welcome panel hidden */
+        @media (max-width: 900px) {
+            .app-layout-wrapper { max-width: 520px; padding: 8px 0; }
+            .app-layout-wrapper.is-split { gap: 0; }
+            .layout-right, .app-layout-wrapper.is-split .layout-right { display: none !important; }
+            .layout-left { flex: 1 1 100%; }
+            .reg-glass-bg { padding: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)) !important; }
+            .reg-glass-card { padding: 30px 20px !important; }
+            #setupProfileStep1 .reg-glass-card, #setupProfileStep2 .reg-glass-card, #setupProfileStep3 .reg-glass-card { padding: 28px 18px !important; }
+            /* 16px inputs stop iOS from zooming the page on focus */
+            .reg-glass-card input, .reg-glass-card select, .alert-modal input, .alert-modal select, .map-search-bar input { font-size: 16px !important; }
+            .alert-modal { padding: 26px 20px; }
+        }
+        @media (max-width: 480px) {
+            .bday-row { gap: 6px; }
+            .bday-row > select, .bday-row > input { padding: 14px 6px !important; }
+            .layout-left .reg-glass-card h2 { font-size: 21px; }
+            .username-value { font-size: 22px; }
+            .done-row { flex-direction: column; gap: 2px; }
+            .done-row span:last-child { text-align: left; }
+        }
+        /* Very narrow phones (<360px): stack side-by-side fields (rows marked keep-row stay side by side) */
+        @media (max-width: 359px) {
+            .responsive-row:not(.keep-row) { flex-direction: column; align-items: stretch; gap: 0; }
+            .responsive-row:not(.keep-row) > div + div { margin-top: 12px; }
+            .responsive-row:not(.keep-row) .fixed-width { width: 100%; }
+        }
+        /* Landscape phones: keep modals usable */
+        @media (max-height: 480px) {
+            #googleMapContainer { height: 150px; min-height: 120px; }
+            .map-footer { max-height: 45vh; }
+        }
+    </style>
+
+    <!-- GOOGLE MAP MODAL -->
+    <div id="meshMapOverlay" class="map-overlay">
+        <div class="map-modal">
+            <div class="map-header">
+                <h3 data-i18n="mapTitle">Pin Your Location</h3>
+                <span class="map-close" onclick="closeMapModal()">&times;</span>
+            </div>
+
+            <div class="map-search-bar">
+                <input id="mapPacInput" type="text" data-i18n-placeholder="mapSearch" placeholder="Search for a Barangay or place..." autocomplete="off">
+            </div>
+
+            <div id="googleMapContainer"></div>
+            <div class="map-footer">
+                <strong data-i18n="mapSel">Selected Address:</strong>
+                <p id="mapAddressResult" data-i18n="mapDesc">Click anywhere on the map, or search above to pin your location.</p>
+                <button class="btn-base btn-blue" onclick="confirmMapLocation()" style="margin-bottom: 0;" data-i18n="mapBtn">Confirm Location</button>
+            </div>
+        </div>
+    </div>
+
+   <!-- CUSTOM SYSTEM ALERT MODAL (Fixed Z-Index to 999999 so it NEVER hides) -->
+    <div id="customAlertOverlay" class="alert-overlay" style="z-index: 999999 !important;">
+        <div class="alert-modal">
+            <h3 class="alert-title" data-i18n="alertNotice">Notice</h3>
+            <p id="customAlertMessage" class="alert-message"></p>
+            <button class="btn-base btn-blue btn-alert" onclick="closeCustomAlert()" data-i18n="alertOk">OK</button>
+        </div>
+    </div>
+
+    <!-- FAMILY MEMBER MODAL -->
+    <div id="famModalOverlay" class="alert-overlay" style="z-index: 100002 !important;">
+        <div class="alert-modal" style="text-align: left; padding: 26px 22px; max-width: 520px; width: 100%;">
+            <h3 style="color: #0b3b60; font-size: 20px; font-weight: 800; margin: 0 0 20px 0;">Add Family Member</h3>
+
+            <!-- SPLIT NAME FIELDS -->
+            <div class="responsive-row" style="margin-bottom: 15px;">
+                <div>
+                    <label class="form-label" style="margin-top:0;">First Name</label>
+                    <input type="text" id="fmFirstName" placeholder="First Name" autocomplete="off">
+                </div>
+                <div>
+                    <label class="form-label" style="margin-top:0;">Middle Name</label>
+                    <input type="text" id="fmMiddleName" placeholder="Middle Name" autocomplete="off">
+                </div>
+            </div>
+            <div class="responsive-row keep-row" style="margin-bottom: 15px;">
+                <div>
+                    <label class="form-label" style="margin-top:0;">Surname</label>
+                    <input type="text" id="fmLastName" placeholder="Surname" autocomplete="off">
+                </div>
+                <div style="flex: 0 0 80px;">
+                    <label class="form-label" style="margin-top:0;">Ext.</label>
+                    <input type="text" id="fmExtName" placeholder="Jr/Sr" autocomplete="off">
+                </div>
+            </div>
+
+            <div class="responsive-row keep-row" style="margin-bottom: 15px;">
+                <div style="flex: 1.5;">
+                    <label class="form-label" style="margin-top: 0;">Relation to Head</label>
+                    <!-- Added onchange trigger here -->
+                    <select id="fmRel" onchange="autoSelectFamSex()">
+                        <option value="" disabled selected>Select Relation</option>
+                        <option value="Spouse">Spouse</option>
+                        <option value="Son">Son</option>
+                        <option value="Daughter">Daughter</option>
+                        <option value="Parent">Parent</option>
+                        <option value="Sibling">Sibling</option>
+                        <option value="Relative">Relative</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label" style="margin-top: 0;">Sex</label>
+                    <select id="fmSex">
+                        <option value="Male">Male</option><option value="Female">Female</option>
+                    </select>
+                </div>
+            </div>
+
+            <div class="responsive-row keep-row" style="margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label class="form-label" style="margin-top: 0;">Birthdate</label>
+                    <div class="bday-row">
+                        <select id="fmBdayMonth" onchange="calcFamAgeModal()" style="padding: 14px 8px !important;">
+                            <option value="" disabled selected>Mo</option>
+                            <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option><option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option><option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+                        </select>
+                        <input type="tel" id="fmBdayDay" placeholder="DD" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value.length > 2) this.value = this.value.slice(0,2); calcFamAgeModal();" autocomplete="off" style="text-align: center; padding: 14px 8px !important;">
+                        <input type="tel" id="fmBdayYear" placeholder="YYYY" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value.length > 4) this.value = this.value.slice(0,4); calcFamAgeModal();" autocomplete="off" style="text-align: center; padding: 14px 8px !important;">
+                    </div>
+                </div>
+                <div style="flex: 0 0 60px;">
+                    <label class="form-label" style="margin-top: 0;">Age</label>
+                    <input type="number" id="fmAge" placeholder="-" readonly style="background: #f9fafb !important; padding: 14px 8px !important; text-align: center;">
+                </div>
+            </div>
+
+            <div class="responsive-row" style="margin-bottom: 15px;">
+                <div style="flex: 1;">
+                    <label class="form-label" style="margin-top: 0;">Highest Education</label>
+                    <select id="fmEdu">
+                        <option value="" disabled selected>Select</option>
+                        <option value="None">None</option>
+                        <option value="Elementary Level">Elementary Level</option>
+                        <option value="Elementary Graduate">Elementary Graduate</option>
+                        <option value="Junior High School Level">Junior High School Level</option>
+                        <option value="Junior High School Completer">Junior High School Completer</option>
+                        <option value="Senior High School Level">Senior High School Level</option>
+                        <option value="High School Graduate">High School Graduate</option>
+                        <option value="College Level">College Level</option>
+                        <option value="College Graduate">College Graduate</option>
+                        <option value="Graduate Studies">Graduate Studies</option>
+                        <option value="Post-Graduate Studies">Post-Graduate Studies</option>
+                    </select>
+                </div>
+                <div style="flex: 1;">
+                    <label class="form-label" style="margin-top: 0;">Occupation</label>
+                    <select id="fmOcc">
+                        <option value="" disabled selected>Select</option>
+                        <option value="Unemployed">Unemployed</option>
+                        <option value="Government Employee">Government Employee</option>
+                        <option value="Private Employee">Private Employee</option>
+                        <option value="Self Employed">Self Employed</option>
+                    </select>
+                </div>
+            </div>
+
+            <label class="form-label" style="margin-top: 0;">Remarks / Special Needs (Optional)</label>
+            <input type="text" id="fmRem" placeholder="e.g. Bedridden, Asthma, Solo Parent, OFW..." autocomplete="off">
+
+            <div style="display: flex; gap: 10px; margin-top: 25px;">
+                <button class="btn-base btn-grey" onclick="closeFamModal()" style="margin-bottom: 0;">Cancel</button>
+                <button class="btn-base btn-blue" onclick="saveFamModal()" style="margin-bottom: 0;">Save Member</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- AUTHENTICATION OVERLAY -->
+    <div id="authOverlay" class="reg-glass-bg">
+
+        <!-- TWO-COLUMN WRAPPER -->
+        <div class="app-layout-wrapper">
+
+            <!-- LEFT COLUMN: Your exact forms -->
+            <div class="layout-left">
+
+                <!-- 1. LANGUAGE SELECTION -->
+                <div id="languageForm">
+                    <div class="reg-glass-card">
+                        <div style="margin: 0 auto 20px auto; width: 100px; height: 100px;">
+                            <img src="https://tech2forms.com/wp-content/uploads/2026/08/767242790_2584290141989037_3631061154976649797_n.png" alt="AMPING Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                        </div>
+                        <h2>Select Language</h2>
+                        <p style="font-size: 13px;">Choose your preferred language / Pagpili sa imong pinulongan / Piliin ang iyong wika.</p>
+
+                        <button class="btn-base btn-grey" onclick="saveLanguage('en')">English</button>
+                        <button class="btn-base btn-blue" onclick="saveLanguage('ceb')">Bisaya</button>
+                        <button class="btn-base btn-red" onclick="saveLanguage('tl')" style="margin-bottom: 0;">Filipino</button>
+                    </div>
+                </div>
+
+                <!-- 2. MESH REGISTRATION (Welcome) -->
+                <div id="welcomeForm" class="hidden">
+                    <div class="reg-glass-card">
+                        <div style="margin: 0 auto 20px auto; width: 100px; height: 100px;">
+                            <img src="https://tech2forms.com/wp-content/uploads/2026/08/767242790_2584290141989037_3631061154976649797_n.png" alt="AMPING Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                        </div>
+                        <h2 data-i18n="welcTitle">Mesh Registration</h2>
+                        <p data-i18n="welcSub">Create a secure, verified local account to connect with LGU Responders and your community.</p>
+
+                        <button class="btn-base btn-blue" onclick="toggleAuth('residentCheckForm')" style="margin-bottom: 0;" data-i18n="welcBtn">Start Registration ❯</button>
+                    </div>
+                </div>
+
+                <!-- 3. RESIDENCY CHECK -->
+                <div id="residentCheckForm" class="hidden">
+                    <div class="reg-glass-card">
+                        <span class="card-icon">🏠</span>
+                        <h2 data-i18n="resTitle">Do you live here?</h2>
+                        <p data-i18n="resSub">To help rescuers find you quickly during a disaster, do you permanently live in Butuan City?</p>
+
+                        <button class="btn-base btn-green" onclick="proceedToStatusCheck('Yes')" data-i18n="resYes">Yes, I live here</button>
+                        <button class="btn-base btn-grey" onclick="proceedToStatusCheck('No')" style="margin-bottom: 0;" data-i18n="resNo">No, I am just visiting</button>
+                    </div>
+                </div>
+
+                <!-- 4. STATUS CHECK -->
+                <div id="statusCheckForm" class="hidden">
+                    <div class="reg-glass-card">
+                        <span class="card-icon">🧑‍🤝‍🧑</span>
+                        <h2 data-i18n="statTitle">What is your status?</h2>
+                        <p data-i18n="statSub">Please tell us your current status so we know what kind of ID to ask for.</p>
+
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px;">
+                            <button class="btn-base btn-grey" style="margin-bottom: 0;" onclick="proceedToRegistrationForm('Student')" data-i18n="btnStud">Student</button>
+                            <button class="btn-base btn-grey" style="margin-bottom: 0;" onclick="proceedToRegistrationForm('Employed')" data-i18n="btnEmp">Employed</button>
+                            <button class="btn-base btn-grey" style="margin-bottom: 0;" onclick="proceedToRegistrationForm('Senior Citizen')" data-i18n="btnSen">Senior</button>
+                            <button class="btn-base btn-grey" style="margin-bottom: 0;" onclick="proceedToRegistrationForm('Unemployed')" data-i18n="btnUnemp">Unemployed</button>
+                        </div>
+
+                        <span class="link-text" onclick="toggleAuth('residentCheckForm')" data-i18n="goBack">Go Back</span>
+                    </div>
+                </div>
+
+                <!-- 5. SETUP PROFILE - STEP 1 (ABOUT YOU) -->
+                <div id="setupProfileStep1" class="hidden">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="color: #0b3b60; font-size: 26px; font-weight: 800; margin: 0;" data-i18n="s1Title">Sign Up</h2>
+                    </div>
+                    <div class="reg-glass-card">
+                        <strong class="section-title" data-i18n="s1Sub">STEP 1: ABOUT YOU</strong>
+
+                        <!-- SPLIT NAME FIELDS -->
+                        <div class="responsive-row" style="margin-bottom: 12px;">
+                            <div>
+                                <label class="form-label" style="margin-top:0;">First Name</label>
+                                <input type="text" id="regFirstName" placeholder="First Name" autocomplete="new-password" spellcheck="false">
+                            </div>
+                            <div>
+                                <label class="form-label" style="margin-top:0;">Middle Name</label>
+                                <input type="text" id="regMiddleName" placeholder="Middle Name" autocomplete="new-password" spellcheck="false">
+                            </div>
+                        </div>
+                        <div class="responsive-row keep-row">
+                            <div>
+                                <label class="form-label" style="margin-top:0;">Last Name</label>
+                                <input type="text" id="regLastName" placeholder="Last Name" autocomplete="new-password" spellcheck="false">
+                            </div>
+                            <div style="flex: 0 0 80px;">
+                                <label class="form-label" style="margin-top:0;">Ext.</label>
+                                <input type="text" id="regExtName" placeholder="Jr/Sr" autocomplete="new-password" spellcheck="false">
+                            </div>
+                        </div>
+
+                        <div class="responsive-row keep-row">
+                            <div style="flex: 1;">
+                                <label class="form-label" data-i18n="lBday">Birthday</label>
+                                <div class="bday-row">
+                                    <select id="regBdayMonth" onchange="calculateAgeDrop('reg')">
+                                        <option value="" disabled selected>Month</option>
+                                        <option value="01">Jan</option><option value="02">Feb</option><option value="03">Mar</option><option value="04">Apr</option><option value="05">May</option><option value="06">Jun</option><option value="07">Jul</option><option value="08">Aug</option><option value="09">Sep</option><option value="10">Oct</option><option value="11">Nov</option><option value="12">Dec</option>
+                                    </select>
+                                    <input type="tel" id="regBdayDay" placeholder="DD" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value.length > 2) this.value = this.value.slice(0,2); calculateAgeDrop('reg');" autocomplete="off" style="text-align: center;">
+                                    <input type="tel" id="regBdayYear" placeholder="YYYY" oninput="this.value = this.value.replace(/[^0-9]/g, ''); if(this.value.length > 4) this.value = this.value.slice(0,4); calculateAgeDrop('reg');" autocomplete="off" style="text-align: center;">
+                                </div>
+                                <input type="hidden" id="regBirthday">
+                            </div>
+                            <div class="fixed-width">
+                                <label class="form-label" data-i18n="lAge">Age</label>
+                                <input type="number" id="regAge" placeholder="Auto" readonly style="background: #f9fafb !important;" autocomplete="off">
+                            </div>
+                        </div>
+
+                        <label class="form-label" data-i18n="lSex">Sex</label>
+                        <select id="regGender">
+                            <option value="" disabled selected>Select Sex</option>
+                            <option value="Male">Male</option>
+                            <option value="Female">Female</option>
+                        </select>
+                        <input type="hidden" id="regIsResident" value="Yes">
+
+                        <!-- OCCUPATION STATUS (LOCKED TEXT FIELD) -->
+                        <label class="form-label">Occupation Status</label>
+                        <input type="text" id="regStatus" readonly style="background: #f9fafb !important; pointer-events: none;" tabindex="-1">
+
+                        <label id="regIdLabel" class="form-label" data-i18n="s1Id">Upload Valid ID (Required)</label>
+
+                        <!-- 1. Hide the ugly default input -->
+                        <input type="file" id="regIdUpload" accept="image/*" style="display: none;" onchange="document.getElementById('regIdFileName').innerText = this.files[0] ? '✅ ' + this.files[0].name : '📸 Open Camera or Gallery'">
+
+                        <!-- 2. Create a modern clickable drop-zone/button linked to the hidden input -->
+                        <label for="regIdUpload" style="display: flex; align-items: center; justify-content: center; width: 100%; background: #ffffff; border: 2px dashed #cbd5e1; border-radius: 8px; padding: 16px; cursor: pointer; color: #0072ff; font-size: 13.5px; font-weight: 700; margin-bottom: 20px; transition: all 0.2s ease; text-align: center;">
+                            <span id="regIdFileName">📸 Open Camera or Gallery</span>
+                        </label>
+
+                        <div style="display: flex; gap: 10px;">
+                            <button class="btn-base btn-grey" onclick="toggleAuth('statusCheckForm')" data-i18n="btnBack">❮ Back</button>
+                            <!-- Button hidden by default with display: none -->
+                            <button id="btnNextStep1" class="btn-base btn-blue" onclick="validateStep1()" style="display: none;" data-i18n="btnNext">Next Step ❯</button>
+                        </div>
+                    </div>
+                </div>
+
+               <!-- 6. SETUP PROFILE - STEP 2 (LOCATION) -->
+                <div id="setupProfileStep2" class="hidden">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="color: #0b3b60; font-size: 26px; font-weight: 800; margin: 0;" data-i18n="s2Title">Location</h2>
+                    </div>
+                    <div class="reg-glass-card">
+                        <style>
+                            @keyframes slideDownFade { from { opacity: 0; transform: translateY(-15px); } to { opacity: 1; transform: translateY(0); } }
+                            .cascade-step { animation: slideDownFade 0.4s cubic-bezier(0.22, 1, 0.36, 1); }
+                        </style>
+
+                        <strong class="section-title green" data-i18n="s2Sub">STEP 2: YOUR LOCATION</strong>
+
+                        <!-- 1. RESIDENTIAL ADDRESS (Always Visible): Barangay dropdown uses the exact same names as the Mesh app -->
+                        <label class="form-label" style="display: flex; justify-content: space-between; align-items: center;">
+                            <span data-i18n="lResAdd">Residential Address</span>
+                            <span class="action-badge" onclick="openMapModal()" data-i18n="s2Pin">📍 Pin on Map</span>
+                        </label>
+                        <select id="regBarangay" onchange="onBarangayChange()">
+                            <option value="" disabled selected data-i18n="s2SelBrgy">Select Barangay...</option>
+                        </select>
+                        <!-- Street line removed; hidden field still receives the address from the map pin -->
+                        <input type="hidden" id="regAddress" value="">
+
+                        <!-- CASCADE WRAPPER 1: PUROK -->
+                        <div id="wrapPurok" class="cascade-step" style="display: none; margin-top: 15px; border-top: 1px dashed #cbd5e1; padding-top: 15px;">
+                            <label class="form-label" data-i18n="lPurok">Purok</label>
+                            <select id="regPurok" style="margin-bottom: 20px;">
+                                <option value="" disabled selected data-i18n="s2Purok">Select Purok</option>
+                                <option value="Purok 1">Purok 1</option>
+                                <option value="Purok 2">Purok 2</option>
+                                <option value="Purok 3">Purok 3</option>
+                                <option value="Purok 4">Purok 4</option>
+                                <option value="Purok 5">Purok 5</option>
+                                <option value="Purok 6">Purok 6</option>
+                                <option value="Purok 7">Purok 7</option>
+                            </select>
+                        </div>
+
+                        <!-- CASCADE WRAPPER 2: PERMANENT ADDRESS -->
+                        <div id="wrapPermAddr" class="cascade-step" style="display: none;">
+                            <label class="form-label" style="display: flex; justify-content: space-between;">
+                                <span data-i18n="lPermAdd">Permanent Address</span>
+                                <span class="action-badge" onclick="copyToPermanent()" data-i18n="s2SameAdd">Same Address as Residential</span>
+                            </label>
+                            <input type="text" id="regPermAddress" data-i18n-placeholder="lPermAdd" placeholder="Permanent Address" autocomplete="new-password" spellcheck="false" data-lpignore="true" style="margin-bottom: 20px;">
+                        </div>
+
+                        <!-- CASCADE WRAPPER 3: PERMANENT PUROK -->
+                        <div id="wrapPermPurok" class="cascade-step" style="display: none;">
+                            <input type="text" id="regPermPurok" placeholder="Type Permanent Purok (e.g. Purok 7)" autocomplete="new-password" spellcheck="false" data-lpignore="true" style="margin-bottom: 20px;">
+                        </div>
+
+                        <!-- CASCADE WRAPPER 4: OTP SECTION -->
+                        <div id="wrapOtp" class="cascade-step" style="display: none;">
+                            <label class="form-label" data-i18n="s2Phone">Contact Number (Verification Required)</label>
+                            <div id="phoneInputSection">
+                                <div style="display: flex; gap: 8px;">
+                                    <div style="background: #ffffff; color: #0b3b60; padding: 14px; border-radius: 8px; font-weight: 700; border: 1px solid #d1d5db;">+63</div>
+                                    <input type="tel" id="regContact" placeholder="9123456789" inputmode="numeric" oninput="sanitizePhoneInput(this)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); sendOTP(); }" autocomplete="off">
+                                </div>
+                                <div id="recaptcha-container"></div>
+                                <button type="button" id="btnSendOTP" class="btn-base btn-grey" style="margin-top: 10px; margin-bottom: 0; border-radius: 8px !important;" onclick="sendOTP()" data-i18n="s2SendOtp">Send OTP SMS</button>
+                                <div class="recaptcha-note">Protected by reCAPTCHA · <a href="https://policies.google.com/privacy" target="_blank" rel="noopener">Privacy</a> · <a href="https://policies.google.com/terms" target="_blank" rel="noopener">Terms</a></div>
+                            </div>
+
+                            <div id="otpVerifySection" class="hidden" style="margin-top: 10px; padding: 15px; background: #f8fafc; border: 1px solid #d1d5db; border-radius: 8px;">
+                                <label class="form-label" style="margin-top: 0; color: #0072ff; text-align: center;" data-i18n="s2EnterOtp">Enter 6-Digit Code</label>
+                                <p id="otpSentTo" style="font-size: 12px; margin: 0 0 10px 0; text-align: center;"></p>
+                                <input type="text" id="otpCode" placeholder="••••••" inputmode="numeric" pattern="[0-9]*" oninput="onOtpInput(this)" onkeydown="if (event.key === 'Enter') { event.preventDefault(); verifyOTP(); }" style="text-align: center; letter-spacing: 8px; font-size: 18px; font-weight: bold;" autocomplete="one-time-code">
+                                <p id="otpMessage" style="font-size: 12px; color: #ef4444; margin-top: 8px; display: none;"></p>
+                                <span id="otpResendLink" class="link-text" onclick="resendOTP()" style="display: block; text-align: center;"></span>
+                                <div style="display: flex; gap: 10px; margin-top: 15px;">
+                                    <button type="button" class="btn-base btn-grey" onclick="resetPhoneAuth()" style="margin-bottom: 0; font-size: 13px;" data-i18n="s2ChangeNum">Change Number</button>
+                                    <button type="button" id="btnVerifyOTP" class="btn-base btn-green" onclick="verifyOTP()" style="margin-bottom: 0;" data-i18n="s2Verify">Verify Code</button>
+                                </div>
+                            </div>
+
+                            <div id="phoneSuccessSection" class="hidden" style="margin-top: 10px; padding: 14px; background: #dcfce7; border: 1px solid #86efac; border-radius: 8px; color: #166534; font-weight: 700; font-size: 13px; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                                <span>✅</span> <span data-i18n="s2Success">Number Verified Successfully!</span>
+                            </div>
+                        </div>
+
+                        <!-- NEXT BUTTON (Hidden default) -->
+                        <div style="display: flex; gap: 10px; margin-top: 20px;">
+                            <button class="btn-base btn-grey" onclick="toggleAuth('setupProfileStep1')" data-i18n="btnBack">❮ Back</button>
+                            <button id="btnNextStep2" class="btn-base btn-blue cascade-step" onclick="validateStep2()" style="display: none;" data-i18n="btnNext">Next Step ❯</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- 7. SETUP PROFILE - STEP 3 (HOUSEHOLD & SECURITY) -->
+                <div id="setupProfileStep3" class="hidden">
+                    <div style="text-align: center; margin-bottom: 20px;">
+                        <h2 style="color: #0b3b60; font-size: 26px; font-weight: 800; margin: 0;" data-i18n="s3Title">Security</h2>
+                    </div>
+                    <div class="reg-glass-card">
+
+                        <strong class="section-title yellow" data-i18n="s3Sub">STEP 3: HOUSEHOLD PROFILING</strong>
+
+                        <!-- HOF QUESTION TOGGLE -->
+                        <label class="form-label">Are you the Head of the Family?</label>
+                        <div style="display: flex; gap: 10px; margin-bottom: 20px;">
+                            <button type="button" id="btnHofYes" class="btn-base btn-grey" style="margin-bottom: 0;" onclick="toggleHof('yes')">✅ Yes, I am</button>
+                            <button type="button" id="btnHofNo" class="btn-base btn-grey" style="margin-bottom: 0;" onclick="toggleHof('no')">👤 No, I'm not</button>
+                        </div>
+                        <input type="hidden" id="regIsHof" value="">
+
+                        <!-- IF NO: Just ask for HOF Name -->
+                        <div id="hofNoSection" class="hidden" style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 20px;">
+                            <label class="form-label" style="margin-top: 0;">Full Name of your Head of Family:</label>
+                            <input type="text" id="regHofName" placeholder="e.g. Juan Dela Cruz" autocomplete="new-password" spellcheck="false" data-lpignore="true">
+
+                            <label class="form-label">Relationship to Head:</label>
+                            <select id="regHofRel">
+                                <option value="" disabled selected>Select Relationship</option>
+                                <option value="Wife">Wife</option><option value="Husband">Husband</option>
+                                <option value="Son">Son</option><option value="Daughter">Daughter</option>
+                                <option value="Relative">Relative</option><option value="Other">Other</option>
+                            </select>
+                        </div>
+
+                        <!-- IF YES: The DAFAC Government Fields Expand -->
+                        <div id="hofYesSection" class="hidden" style="background: #fffbeb; padding: 15px; border-radius: 8px; border: 1px solid #fde68a; margin-bottom: 20px; text-align: left;">
+                            <span style="display:block; font-size: 11px; color: #d97706; font-weight: bold; margin-bottom: 15px; text-transform: uppercase;">Head of Family Details</span>
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label" style="margin-top: 0;">Birthplace</label>
+                                    <input type="text" id="regBirthplace" placeholder="City/Province" autocomplete="new-password">
+                                </div>
+                                <div>
+                                    <label class="form-label" style="margin-top: 0;">Civil Status</label>
+                                    <select id="regCivilStatus">
+                                        <option value="Single">Single</option><option value="Married">Married</option>
+                                        <option value="Widowed">Widowed</option><option value="Separated">Separated</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <label class="form-label">Mother's Maiden Name</label>
+                            <input type="text" id="regMaidenName" placeholder="First Name, Middle Name, Last Name" autocomplete="new-password">
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label">Religion</label>
+                                    <input type="text" id="regReligion" placeholder="e.g. Catholic" autocomplete="new-password">
+                                </div>
+                                <div>
+                                    <label class="form-label">Ethnicity / IP</label>
+                                    <input type="text" id="regEthnicity" placeholder="e.g. Manobo (or None)" autocomplete="new-password">
+                                </div>
+                            </div>
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label">Monthly Income</label>
+                                    <select id="regIncome">
+                                        <option value="Below 10k">Below 10k</option>
+                                        <option value="10k - 20k">10k - 20k</option>
+                                        <option value="Above 20k">Above 20k</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="form-label">4Ps Beneficiary?</label>
+                                    <select id="reg4ps">
+                                        <option value="No">No</option><option value="Yes">Yes</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <!-- DYNAMIC FAMILY MEMBERS LIST (DAFAC ITEM 25) -->
+                            <div style="margin-top: 25px; border-top: 1px dashed #fde68a; padding-top: 15px;">
+                                <strong style="display:block; font-size: 11px; color: #d97706; font-weight: bold; margin-bottom: 10px; text-transform: uppercase;">Family Members List</strong>
+
+                                <div id="familyMembersContainer" style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 12px;"></div>
+
+                                <button type="button" class="btn-base btn-grey" onclick="openFamModal()" style="margin-bottom: 0; padding: 12px; font-size: 13px; color: #d97706; border-color: #fde68a; background: #fff !important;">➕ Add Family Member</button>
+                            </div>
+                        </div>
+
+                       <!-- HOUSEHOLD COUNTS (Hidden until YES/NO is chosen) -->
+                        <div id="householdCountsSection" class="hidden">
+                            <label class="form-label" data-i18n="s3Fam">Total people living here (including you):</label>
+                            <input type="number" id="regFamilyCount" placeholder="e.g. 4" min="1" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+
+                            <strong class="section-title" style="margin-top: 20px; border-bottom: none; margin-bottom: 0;">VULNERABLE MEMBERS COUNT</strong>
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label">Senior Citizens (60+):</label>
+                                    <input type="number" id="regSeniorCount" placeholder="0" min="0" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+                                </div>
+                                <div>
+                                    <label class="form-label" data-i18n="s3Preg">Pregnant Women:</label>
+                                    <input type="number" id="regPregnantCount" placeholder="0" min="0" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+                                </div>
+                            </div>
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label">Lactating Mothers:</label>
+                                    <input type="number" id="regLactatingCount" placeholder="0" min="0" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+                                </div>
+                                <div>
+                                    <label class="form-label" data-i18n="s3Inf">Infants (0-1):</label>
+                                    <input type="number" id="regInfantCount" placeholder="0" min="0" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+                                </div>
+                            </div>
+
+                            <div class="responsive-row">
+                                <div>
+                                    <label class="form-label" data-i18n="s3Kid">Kids (1-12):</label>
+                                    <input type="number" id="regChildrenCount" placeholder="0" min="0" oninput="this.value = this.value.replace(/[^0-9]/g, '')" autocomplete="off">
+                                </div>
+                                <div></div>
+                            </div>
+
+                            <label class="form-label" data-i18n="s3Pwd">Are there any PWD in your family?</label>
+                            <select id="regHasPwd" onchange="document.getElementById('regPwdDetails').style.display = this.value === 'Yes' ? 'block' : 'none'">
+                                <option value="No" selected>No</option>
+                                <option value="Yes">Yes</option>
+                            </select>
+                            <div id="regPwdDetails" style="display: none; background: #f8fafc; border: 1px solid #e5e7eb; border-radius: 8px; padding: 10px; margin-top: 8px;">
+                                <input type="number" id="regPwdCount" min="1" data-i18n-placeholder="pwdHow" placeholder="How many PWDs?" autocomplete="off" oninput="this.value = this.value.replace(/[^0-9]/g, '').slice(0, 2)">
+                                <input type="text" id="regPwdType" data-i18n-placeholder="pwdKind" placeholder="Specify kind of PWD" autocomplete="off" style="margin-top: 8px;">
+                            </div>
+
+                            <strong class="section-title yellow" style="margin-top: 25px;">ACCOUNT SECURITY</strong>
+                            <label class="form-label" data-i18n="s3Pin">Create a 4-to-6 Digit PIN</label>
+                            <input type="password" id="regPin" placeholder="••••••" maxlength="6" inputmode="numeric" oninput="this.value = this.value.replace(/\D/g, '').slice(0, 6)" style="text-align: center; letter-spacing: 4px; font-weight: bold; font-size: 18px !important;" autocomplete="new-password">
+                            <span class="input-hint" data-i18n="s3PinDesc" style="margin-bottom: 20px;">Required for verifying identity.</span>
+
+                            <div style="display: flex; gap: 10px;">
+                                <button class="btn-base btn-grey" onclick="toggleAuth('setupProfileStep2')" data-i18n="btnBack">❮ Back</button>
+                                <button id="uiProfBtn" class="btn-base btn-green" onclick="saveProfile()" data-i18n="btnSubmit">Submit Profile</button>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- 8. REGISTRATION COMPLETE -->
+                <div id="registrationSuccess" class="hidden">
+                    <div class="reg-glass-card">
+                        <div class="done-logo">
+                            <img src="https://tech2forms.com/wp-content/uploads/2026/08/767242790_2584290141989037_3631061154976649797_n.png" alt="AMPING Logo" style="width: 100%; height: 100%; object-fit: contain;">
+                        </div>
+                        <h2 data-i18n="doneTitle">Registration Complete!</h2>
+                        <p data-i18n="doneSub">Use this username and PIN to sign in to the AMPING Mesh app.</p>
+
+                        <div class="username-box">
+                            <span class="username-label" data-i18n="doneUserLbl">YOUR USERNAME</span>
+                            <div id="doneUsername" class="username-value"></div>
+                            <button type="button" id="doneCopyBtn" class="username-copy" onclick="copyUsername()" data-i18n="doneCopy">Copy</button>
+                            <div style="border-top: 1px dashed #bfdbfe; margin: 16px 0 14px 0;"></div>
+                            <span class="username-label" data-i18n="donePinLbl">YOUR PIN</span>
+                            <div id="donePinValue" class="username-value" style="letter-spacing: 6px;"></div>
+                        </div>
+
+                        <div class="pin-reminder">🔒 <span data-i18n="donePin">Keep your username and PIN safe. Never share your PIN or this image — LGU staff will never ask for your PIN.</span></div>
+
+                        <button type="button" class="btn-base btn-blue" onclick="saveCredentialCard()" style="margin-bottom: 0;" data-i18n="doneSave">📥 Save as Image</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- RIGHT COLUMN: Welcoming Layout -->
+            <div class="layout-right">
+                <img src="https://tech2forms.com/wp-content/uploads/2026/08/767242790_2584290141989037_3631061154976649797_n.png" alt="AMPING Logo">
+                <h1 data-i18n="rightTitle">Welcome to the AMPING<br>digital network</h1>
+                <p data-i18n="rightSub">Register securely and connect with your local community responders.</p>
+            </div>
+
+        </div>
+    </div>
+
+    <script>
+        // ==========================
+        // FIREBASE INITIALIZATION & SMS AUTH LOGIC
+        // ==========================
+        const firebaseConfig = {
+        apiKey: "AIzaSyDsK7mAo-lEV1gWmRNYF4eJ8EJDi2I2FrU",
+        authDomain: "tech2forms.firebaseapp.com",
+        databaseURL: "https://tech2forms-default-rtdb.firebaseio.com",
+        projectId: "tech2forms",
+        storageBucket: "tech2forms.firebasestorage.app",
+        messagingSenderId: "704986097600",
+        appId: "1:704986097600:web:616dff613824dac29bca25",
+        measurementId: "G-TN6L1JCE1F"
+        };
+
+        if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+
+        let confirmationResult = null;
+        let isPhoneVerified = false;
+        let verifiedPhoneNumber = "";   // E.164 number Firebase actually verified — use this when saving the profile
+        let pendingPhoneNumber = "";    // number the current OTP was sent to
+        let otpSending = false, otpVerifying = false;
+        let otpResendTimer = null;
+        const OTP_RESEND_SECONDS = 60;
+
+        // Accepts 9123456789, 09123456789, 639123456789, +63 912 345 6789 → "9123456789" (or "" if not a PH mobile)
+        function normalizePHMobile(raw) {
+            let d = String(raw || '').replace(/\D/g, '');
+            if (d.startsWith('63')) d = d.slice(2);
+            while (d.startsWith('0')) d = d.slice(1);
+            return /^9\d{9}$/.test(d) ? d : '';
+        }
+
+        function sanitizePhoneInput(el) {
+            let d = el.value.replace(/\D/g, '');
+            if (d.startsWith('63')) d = d.slice(2);
+            while (d.startsWith('0')) d = d.slice(1);
+            el.value = d.slice(0, 10);
+        }
+
+        // Pulls the 6-digit code out of anything typed/pasted/autofilled (e.g. the whole SMS text)
+        function onOtpInput(el) {
+            const run = el.value.match(/\d{6}/);
+            el.value = run ? run[0] : el.value.replace(/\D/g, '').slice(0, 6);
+            document.getElementById('otpMessage').style.display = "none";
+            if (el.value.length === 6) verifyOTP();   // auto-submit, no extra tap
+        }
+
+        // Invisible reCAPTCHA: no checkbox, rendered ahead of time so "Send OTP" fires instantly
+        function resetRecaptcha() {
+            try { if (window.recaptchaVerifier) window.recaptchaVerifier.clear(); } catch (e) {}
+            window.recaptchaVerifier = null;
+            document.getElementById('recaptcha-container').innerHTML = '<div></div>';
+        }
+
+        function initRecaptcha() {
+            if (window.recaptchaVerifier) return window.recaptchaVerifier;
+            const box = document.getElementById('recaptcha-container');
+            if (!box.firstElementChild) box.innerHTML = '<div></div>';
+            const verifier = new firebase.auth.RecaptchaVerifier(box.firstElementChild, { size: 'invisible' });
+            window.recaptchaVerifier = verifier;
+            verifier.render().catch((err) => {
+                console.error("reCAPTCHA render error:", err);
+                if (window.recaptchaVerifier === verifier) resetRecaptcha();
+            });
+            return verifier;
+        }
+
+        function otpErrorText(error, stage) {
+            const code = (error && error.code) || '';
+            const map = {
+                'auth/invalid-verification-code': 'otpErrInvalid',
+                'auth/missing-verification-code': 'alertErr7',
+                'auth/code-expired': 'otpErrExpired',
+                'auth/session-expired': 'otpErrExpired',
+                'auth/invalid-verification-id': 'otpErrExpired',
+                'auth/missing-verification-id': 'otpErrExpired',
+                'auth/too-many-requests': 'otpErrTooMany',
+                'auth/quota-exceeded': 'otpErrTooMany',
+                'auth/invalid-phone-number': 'alertErr5',
+                'auth/missing-phone-number': 'alertErr5',
+                'auth/network-request-failed': 'otpErrNetwork',
+                'auth/captcha-check-failed': 'otpErrCaptcha'
+            };
+            if (map[code]) return getTrans(map[code]);
+            return getTrans(stage === 'send' ? 'alertErr6' : 'alertErr8') + (code ? ' (' + code + ')' : '');
+        }
+
+        function startResendCooldown() {
+            stopResendCooldown();
+            const link = document.getElementById('otpResendLink');
+            let left = OTP_RESEND_SECONDS;
+            const paint = () => {
+                if (left > 0) {
+                    link.innerText = getTrans('otpResendIn') + ' ' + left + 's';
+                    link.style.opacity = '0.5'; link.style.pointerEvents = 'none';
+                } else {
+                    link.innerText = getTrans('otpResend');
+                    link.style.opacity = '1'; link.style.pointerEvents = 'auto';
+                }
+            };
+            paint();
+            otpResendTimer = setInterval(() => { left--; paint(); if (left <= 0) stopResendCooldown(); }, 1000);
+        }
+
+        function stopResendCooldown() {
+            if (otpResendTimer) { clearInterval(otpResendTimer); otpResendTimer = null; }
+        }
+
+        function resendOTP() { sendOTP(true); }
+
+        async function sendOTP(isResend) {
+            if (otpSending || isPhoneVerified) return;
+            const input = document.getElementById('regContact');
+            sanitizePhoneInput(input);
+            const local = normalizePHMobile(input.value);
+            if (!local) { alert(getTrans("alertErr5")); input.focus(); return; }
+
+            const phoneNumber = "+63" + local;
+
+            // ==========================================
+            // 🛑 DEVELOPER BYPASS (FOR TESTING ONLY) 🛑
+            // ==========================================
+            if (local === "9999999999") {
+                pendingPhoneNumber = phoneNumber;
+                document.getElementById('phoneInputSection').classList.add('hidden');
+                document.getElementById('otpVerifySection').classList.remove('hidden');
+                document.getElementById('otpSentTo').innerText = "🧪 DEV MODE: Enter code 123456";
+                document.getElementById('otpMessage').style.display = "none";
+                document.getElementById('otpCode').value = "";
+                document.getElementById('otpCode').focus();
+                return;
+            }
+            // ==========================================
+
+            const btn = document.getElementById('btnSendOTP');
+            const link = document.getElementById('otpResendLink');
+            otpSending = true;
+            btn.innerText = getTrans("otpChecking");
+            btn.disabled = true;
+
+            // Check BEFORE sending the SMS: no code is sent to a number that is already registered
+            if (isResend !== true) {
+                let owner = null;
+                try { owner = await findPhoneOwner(firebase.database(), phoneNumber); }
+                catch (e) { console.warn('Could not pre-check number (will re-check after verification):', e); }
+                if (owner) {
+                    otpSending = false;
+                    btn.innerText = getTrans("s2SendOtp");
+                    btn.disabled = false;
+                    alert(phoneUsedText(owner.username));
+                    input.focus();
+                    return;
+                }
+            }
+
+            btn.innerText = getTrans("otpSending");
+            if (isResend === true) { link.innerText = getTrans("otpSending"); link.style.pointerEvents = 'none'; }
+
+            let verifier;
+            try { verifier = initRecaptcha(); } catch (e) { resetRecaptcha(); verifier = initRecaptcha(); }
+
+            firebase.auth().signInWithPhoneNumber(phoneNumber, verifier)
+                .then((result) => {
+                    confirmationResult = result;
+                    pendingPhoneNumber = phoneNumber;
+                    document.getElementById('phoneInputSection').classList.add('hidden');
+                    document.getElementById('otpVerifySection').classList.remove('hidden');
+                    document.getElementById('otpSentTo').innerText = getTrans("otpSentTo") + " +63 " + local.slice(0, 3) + " " + local.slice(3, 6) + " " + local.slice(6);
+                    document.getElementById('otpMessage').style.display = "none";
+                    const vbtn = document.getElementById('btnVerifyOTP');
+                    vbtn.innerText = getTrans("s2Verify");
+                    vbtn.disabled = false;
+                    const codeEl = document.getElementById('otpCode');
+                    codeEl.value = "";
+                    codeEl.focus();
+                    startResendCooldown();
+                }).catch((error) => {
+                    console.error("SMS Error:", error);
+                    const text = otpErrorText(error, 'send');
+                    if (isResend === true) {
+                        const msg = document.getElementById('otpMessage');
+                        msg.innerText = text; msg.style.display = "block";
+                        link.innerText = getTrans("otpResend"); link.style.opacity = '1'; link.style.pointerEvents = 'auto';
+                    } else {
+                        alert(text);
+                    }
+                    btn.innerText = getTrans("s2SendOtp");
+                    btn.disabled = false;
+                    // A failed attempt can leave the reCAPTCHA token spent/broken — rebuild it so the next tap works
+                    resetRecaptcha();
+                    try { initRecaptcha(); } catch (e) {}
+                }).finally(() => { otpSending = false; });
+        }
+
+        function verifyOTP() {
+            if (otpVerifying || isPhoneVerified) return;
+            const input = document.getElementById('otpCode');
+            const code = input.value.replace(/\D/g, '');
+            const msg = document.getElementById('otpMessage');
+            const btn = document.getElementById('btnVerifyOTP');
+
+            if (code.length !== 6) { msg.innerText = getTrans("alertErr7"); msg.style.display = "block"; return; }
+
+            // ==========================================
+            // 🛑 DEVELOPER BYPASS (FOR TESTING ONLY) 🛑
+            // ==========================================
+            const checkLocal = normalizePHMobile(document.getElementById('regContact').value);
+            if (checkLocal === "9999999999" && code === "123456") {
+                isPhoneVerified = true;
+                verifiedPhoneNumber = "+639999999999";
+                document.getElementById('otpVerifySection').classList.add('hidden');
+                document.getElementById('phoneSuccessSection').classList.remove('hidden');
+                document.getElementById('regContact').disabled = true;
+                return;
+            }
+            // ==========================================
+
+            if (!confirmationResult) { msg.innerText = getTrans("otpErrExpired"); msg.style.display = "block"; return; }
+
+            otpVerifying = true;
+            msg.style.display = "none";
+            btn.innerText = getTrans("otpVerifying");
+            btn.disabled = true;
+
+            confirmationResult.confirm(code).then(async (result) => {
+                const user = result && result.user;
+                const phone = (user && user.phoneNumber) || pendingPhoneNumber;
+
+                // Stop right here if this number already has a registration (Submit re-checks this too)
+                let existing = null;
+                try { existing = await findExistingRegistration(user.uid, phone); }
+                catch (e) { console.warn('Could not pre-check number (will re-check on Submit):', e); }
+                if (existing) {
+                    try { await firebase.auth().signOut(); } catch (e) {}
+                    document.getElementById('regContact').value = '';
+                    resetPhoneAuth();
+                    alert(phoneUsedText(existing.username));
+                    return;
+                }
+
+                isPhoneVerified = true;
+                verifiedPhoneNumber = phone;
+                stopResendCooldown();
+                document.getElementById('otpVerifySection').classList.add('hidden');
+                document.getElementById('phoneSuccessSection').classList.remove('hidden');
+                document.getElementById('regContact').disabled = true;
+            }).catch((error) => {
+                console.error("OTP Error:", error);
+                msg.innerText = otpErrorText(error, 'verify');
+                msg.style.display = "block";
+                btn.innerText = getTrans("s2Verify");
+                btn.disabled = false;
+                input.value = "";
+                input.focus();
+            }).finally(() => { otpVerifying = false; });
+        }
+
+        function resetPhoneAuth() {
+            stopResendCooldown();
+            confirmationResult = null;
+            pendingPhoneNumber = "";
+            document.getElementById('otpVerifySection').classList.add('hidden');
+            document.getElementById('phoneInputSection').classList.remove('hidden');
+            document.getElementById('btnSendOTP').innerText = getTrans("s2SendOtp");
+            document.getElementById('btnSendOTP').disabled = false;
+            document.getElementById('btnVerifyOTP').innerText = getTrans("s2Verify");
+            document.getElementById('btnVerifyOTP').disabled = false;
+            document.getElementById('otpCode').value = "";
+            document.getElementById('otpMessage').style.display = "none";
+            document.getElementById('regContact').focus();
+        }
+
+        // ==========================
+        // CUSTOM ALERT OVERRIDE
+        // ==========================
+        window.alert = function(message) {
+            document.getElementById('customAlertMessage').innerText = message;
+            document.getElementById('customAlertOverlay').classList.add('active');
+        };
+        function closeCustomAlert() { document.getElementById('customAlertOverlay').classList.remove('active'); }
+
+        // ==========================
+        // 1. BUTUAN DATA & DROPDOWN LOGIC
+        // ==========================
+        // Same exact names the Rescue Mesh app uses (authorities filter users by an exact barangay match)
+        const butuanBarangays = [
+            "Agao Poblacion (Barangay 3)", "Agusan Pequeño", "Ambago", "Amparo",
+            "Ampayon", "Anticala", "Antongalon", "Aupagan",
+            "Baan KM 3", "Baan Riverside Poblacion (Barangay 20)", "Babag", "Bading Poblacion (Barangay 22)",
+            "Bancasi", "Banza", "Baobaoan", "Basag",
+            "Bayanihan Poblacion (Barangay 27)", "Bilay", "Bit-os", "Bitan-agan",
+            "Bobon", "Bonbon", "Bugabus", "Bugsukan",
+            "Buhangin Poblacion (Barangay 19)", "Cabcabon", "Camayahan", "Dagohoy Poblacion (Barangay 7)",
+            "Dankias", "De Oro", "Diego Silang Poblacion (Barangay 6)", "Don Francisco",
+            "Doongan", "Dulag", "Dumalagan", "Florida",
+            "Golden Ribbon Poblacion (Barangay 2)", "Holy Redeemer Poblacion (Barangay 23)", "Humabon Poblacion (Barangay 11)", "Imadejas Poblacion (Barangay 24)",
+            "Jose Rizal Poblacion (Barangay 25)", "Kinamlutan", "Lapu-Lapu Poblacion (Barangay 8)", "Lemon",
+            "Leon Kilat Poblacion (Barangay 13)", "Libertad", "Limaha Poblacion (Barangay 14)", "Los Angeles",
+            "Lumbocan", "Maguinda", "Mahay", "Mahogany Poblacion (Barangay 21)",
+            "Maibu", "Mandamo", "Manila de Bugabus", "Maon Poblacion (Barangay 1)",
+            "Masao", "Maug", "New Society Village Poblacion (Barangay 26)", "Nong-Nong",
+            "Obrero Poblacion (Barangay 18)", "Ong Yiu Poblacion (Barangay 16)", "Pagatpatan", "Pangabugan",
+            "Pianing", "Pigdaulan", "Pinamanculan", "Port Poyohon Poblacion (Barangay 17)",
+            "Rajah Soliman Poblacion (Barangay 4)", "Salvacion", "San Ignacio Poblacion (Barangay 15)", "San Mateo",
+            "San Vicente", "Santo Niño", "Sikatuna Poblacion (Barangay 10)", "Silongan Poblacion (Barangay 5)",
+            "Sumile", "Sumilihon", "Tagabaca", "Taguibo",
+            "Taligaman", "Tandang Sora Poblacion (Barangay 12)", "Tiniwisan", "Tungao",
+            "Urduja Poblacion (Barangay 9)", "Villa Kananga"
+        ];
+        // "Agao Poblacion (Barangay 3)" → "Agao" — used for map matching and the short address line
+        function brgyShortName(b) { return b.replace(/\s+Poblacion\s+\(Barangay\s+\d+\)$/i, ""); }
+// ==========================
+        // REAL-TIME VALIDATION & SAME ADDRESS LOGIC
+        // ==========================
+        function runStepValidation() {
+            // STEP 1 Validation (Strict check on Name and all Bday parts)
+            const s1 = document.getElementById('setupProfileStep1');
+            if (s1 && !s1.classList.contains('hidden')) {
+                const fName = document.getElementById('regFirstName').value.trim();
+                const lName = document.getElementById('regLastName').value.trim();
+                const month = document.getElementById('regBdayMonth').value;
+                const day = document.getElementById('regBdayDay').value.trim();
+                const year = document.getElementById('regBdayYear').value;
+                const sex = document.getElementById('regGender').value;
+                const idFile = document.getElementById('regIdUpload').files.length > 0;
+                const btn1 = document.getElementById('btnNextStep1');
+                const dateOk = !!parseBday(year, month, day);
+
+                if (btn1) {
+                    btn1.style.display = (fName && lName && dateOk && document.getElementById('regAge').value !== '' && sex && idFile) ? 'flex' : 'none';
+                }
+            }
+
+            // STEP 2 Validation (Step-By-Step Cascade)
+            const s2 = document.getElementById('setupProfileStep2');
+            if (s2 && !s2.classList.contains('hidden')) {
+                const addr = document.getElementById('regAddress').value.trim();
+                const brgy = document.getElementById('regBarangay').value;
+                const purok = document.getElementById('regPurok').value;
+                const pAddr = document.getElementById('regPermAddress').value.trim();
+                const pPurok = document.getElementById('regPermPurok').value.trim();
+
+                // Grab the step wrappers
+                const wPurok = document.getElementById('wrapPurok');
+                const wPermAddr = document.getElementById('wrapPermAddr');
+                const wPermPurok = document.getElementById('wrapPermPurok');
+                const wOtp = document.getElementById('wrapOtp');
+                const btn2 = document.getElementById('btnNextStep2');
+
+                // Cascade logic: The next field ONLY appears when the current one is valid
+                if (wPurok) wPurok.style.display = (brgy) ? 'block' : 'none';
+                if (wPermAddr) wPermAddr.style.display = (brgy && purok) ? 'block' : 'none';
+                if (wPermPurok) wPermPurok.style.display = (brgy && purok && pAddr) ? 'block' : 'none';
+                if (wOtp) wOtp.style.display = (brgy && purok && pAddr && pPurok) ? 'block' : 'none';
+
+                // Reveal the Next button only when everything, including OTP, is successfully done!
+                if (btn2) {
+                    btn2.style.display = (brgy && purok && pAddr && pPurok && isPhoneVerified) ? 'flex' : 'none';
+                }
+            }
+        }
+        setInterval(runStepValidation, 500);
+        ['input', 'change'].forEach((ev) => document.addEventListener(ev, runStepValidation));
+
+        // Fills the Barangay dropdown with the same 86 names (exact strings) the Mesh app stores and filters by
+        function populateBarangayList() {
+            const sel = document.getElementById('regBarangay');
+            butuanBarangays.forEach((b) => sel.add(new Option(b, b)));
+        }
+
+        function onBarangayChange() {
+            populatePurokOptions(document.getElementById('regBarangay').value);
+        }
+
+        // "Ampayon, Butuan City" style fallback when no street/map address was entered
+        function residentialAddressText() {
+            const street = document.getElementById('regAddress').value.trim();
+            if (street) return street;
+            const b = document.getElementById('regBarangay').value;
+            return b ? brgyShortName(b) + ', Butuan City, Agusan del Norte, Philippines' : '';
+        }
+
+        function copyToPermanent() {
+            const address = residentialAddressText();
+            const purok = document.getElementById('regPurok').value;
+            const brgy = document.getElementById('regBarangay').value;
+            
+            if (!brgy) {
+                alert(getTrans('alertErr2'));
+                return;
+            }
+
+            // Copies the text address, and writes the selected purok into the open text box
+            document.getElementById('regPermAddress').value = address;
+            document.getElementById('regPermPurok').value = purok;
+        }
+
+        // Same purok lists as the Mesh app (window.barangayPuroksMap); other barangays get Purok 1–7
+        const barangayPuroksMap = {
+            "Ampayon": [
+                "Purok 1 Centro", "Purok 1", "Purok 1A", "Purok 1B", "Purok 1C", "Purok 1D", "Purok 1E (VCDU)",
+                "Purok 2", "Purok 2A", "Purok 2B", "Purok 3", "Purok 3A", "Purok 3B", "Purok 3C", "Purok 3D",
+                "Purok 4", "Purok 5", "Purok 5A", "Purok 6", "Purok 7", "Purok 7A", "Purok 8", "Purok 9"
+            ],
+            "Los Angeles": [
+                "Purok 1", "Purok 2", "Purok 3", "Purok 4", "Purok 5", "Purok 6", "Purok 7", "Purok 8",
+                "Purok 9", "Purok 10", "Purok 11", "Purok 12", "Purok 13", "Purok 14", "Purok 15", "Purok 16"
+            ]
+        };
+        const defaultPuroks = ["Purok 1", "Purok 2", "Purok 3", "Purok 4", "Purok 5", "Purok 6", "Purok 7"];
+
+        function populatePurokOptions(brgyName) {
+            const sel = document.getElementById('regPurok');
+            const keep = sel.value;
+            const list = barangayPuroksMap[brgyName] || defaultPuroks;
+
+            // 1. Clear ONLY the residential purok dropdown
+            sel.innerHTML = '';
+
+            // 2. Add the default "Select Purok" placeholder
+            const def1 = new Option(getTrans('s2Purok'), '');
+            def1.disabled = true;
+            def1.selected = true;
+            sel.add(def1);
+
+            // 3. Populate the dropdown with the correct Puroks for the pinned Barangay
+            list.forEach((p) => {
+                sel.add(new Option(p, p));
+            });
+
+            // 4. Restore the selected value if they are just moving the pin slightly
+            if (keep && list.includes(keep)) {
+                sel.value = keep;
+            } else {
+                sel.value = '';
+            }
+
+            // Notice: We completely leave regPermPurok alone here because you correctly made it an open text box!
+        }
+
+       function selectBarangay(brgyName) {
+            // Map pin picked a barangay: reflect it in the dropdown
+            const sel = document.getElementById('regBarangay');
+            if (sel) sel.value = brgyName;
+
+            // Tells the Purok system to update its list based on the new map pin
+            if (typeof populatePurokOptions === 'function') {
+                populatePurokOptions(brgyName);
+            }
+        }
+
+        // ==========================
+        // 2. GOOGLE MAPS & GEOCODING LOGIC
+        // ==========================
+        let mapInstance = null, mapMarker = null, geocoder = null;
+        let tempAddress = "", tempBrgy = "";
+        let tempLatLng = null, pickedLatLng = null;   // exact pin, saved as lat/lng so rescuers can navigate to it
+
+        function openMapModal() {
+            if (!window.google || !google.maps || !google.maps.places) {
+                alert("The map could not load. Please check your internet connection, or type your Barangay in the address box instead.");
+                return;
+            }
+            document.getElementById('meshMapOverlay').classList.add('active');
+            setTimeout(() => {
+                if (!mapInstance) {
+                    mapInstance = new google.maps.Map(document.getElementById('googleMapContainer'), { zoom: 13, center: { lat: 8.9492, lng: 125.5436 }, mapTypeControl: false, streetViewControl: false });
+                    geocoder = new google.maps.Geocoder();
+                    const searchBox = new google.maps.places.SearchBox(document.getElementById("mapPacInput"));
+                    mapInstance.addListener("bounds_changed", () => { searchBox.setBounds(mapInstance.getBounds()); });
+                    searchBox.addListener("places_changed", () => {
+                        const places = searchBox.getPlaces();
+                        if (places.length == 0) return;
+                        const place = places[0];
+                        if (!place.geometry || !place.geometry.location) return;
+                        if (place.geometry.viewport) { mapInstance.fitBounds(place.geometry.viewport); } else { mapInstance.setCenter(place.geometry.location); mapInstance.setZoom(17); }
+                        placeMarkerAndGeocode(place.geometry.location);
+                    });
+                    mapInstance.addListener('click', (e) => { placeMarkerAndGeocode(e.latLng); });
+                } else { google.maps.event.trigger(mapInstance, 'resize'); }
+            }, 350);
+        }
+
+        function closeMapModal() { document.getElementById('meshMapOverlay').classList.remove('active'); }
+
+        function placeMarkerAndGeocode(latLng) {
+            if (mapMarker) { mapMarker.setPosition(latLng); } else { mapMarker = new google.maps.Marker({ position: latLng, map: mapInstance, animation: google.maps.Animation.DROP }); }
+            tempLatLng = { lat: latLng.lat(), lng: latLng.lng() };
+            document.getElementById('mapAddressResult').innerHTML = "<em>Loading exact address...</em>";
+
+            geocoder.geocode({ location: latLng }, (results, status) => {
+                if (status === "OK" && results.length > 0) {
+                    tempBrgy = "";
+
+                    // 1. Loop through ALL returned Google address layers to find the hidden Barangay
+                    for (let i = 0; i < results.length; i++) {
+                        tempBrgy = matchBarangayFuzzy(results[i].formatted_address);
+                        if (tempBrgy) break; // Found the barangay! Stop searching.
+                    }
+
+                    if (tempBrgy) {
+                        // 2. If one of the 86 Barangays is found, force this EXACT clean format:
+                        tempAddress = brgyShortName(tempBrgy) + ", Butuan City, Agusan del Norte, Philippines";
+                    } else {
+                        // 3. Fallback: Aggressive vacuum to completely delete ANY Plus Code (e.g. XJW8+H22, )
+                        let cleanAddress = results[0].formatted_address.replace(/[A-Z0-9]{4,8}\+[A-Z0-9]{2,4}[,\s]*/g, "");
+                        tempAddress = cleanAddress.trim();
+                    }
+
+                    document.getElementById('mapAddressResult').innerHTML = tempAddress;
+                } else {
+                    document.getElementById('mapAddressResult').innerText = "Address not found here.";
+                    tempAddress = ""; tempBrgy = "";
+                }
+            });
+        }
+
+        function matchBarangayFuzzy(rawText) {
+            if (!rawText) return "";
+            let lower = rawText.toLowerCase();
+            // Check if one of the 86 barangay names is hiding anywhere in this Google Maps data layer.
+            // Longest names first, so "Manila de Bugabus" wins over "Bugabus".
+            const byLength = butuanBarangays.slice().sort((a, b) => brgyShortName(b).length - brgyShortName(a).length);
+            for (let b of byLength) {
+                if (lower.includes(brgyShortName(b).toLowerCase())) return b;
+            }
+            return "";
+        }
+
+        function confirmMapLocation() {
+            // 1. Save exact coordinates
+            if (tempLatLng) pickedLatLng = tempLatLng;
+
+            // 2. Insert the clean address into the text box
+            if (tempAddress) {
+                document.getElementById('regAddress').value = tempAddress;
+            }
+
+            // 3. Link the Barangay to the Purok system (or clear it if invalid)
+            if (tempBrgy) { 
+                selectBarangay(tempBrgy); 
+            } else if (tempAddress) {
+                alert(getTrans('alertErr4'));   // pinned, but barangay not recognised: pick it from the dropdown
+            }
+
+            // 4. Always close the modal successfully!
+            closeMapModal();
+        }
+
+        // ==========================
+        // 3. COMPLETE MULTILINGUAL SYSTEM
+        // ==========================
+        const langDict = {
+            en: {
+                welcTitle: "Mesh Registration", welcSub: "Create a secure, verified local account to connect with LGU Responders and your community.", welcBtn: "Start Registration ❯",
+                resTitle: "Do you live here?", resSub: "To help rescuers find you quickly during a disaster, do you permanently live in Butuan City?",
+                resYes: "Yes, I live here", resNo: "No, I am just visiting",
+                statTitle: "What is your status?", statSub: "Please tell us your current status so we know what kind of ID to ask for.",
+                btnStud: "Student", btnEmp: "Employed", btnSen: "Senior", btnUnemp: "Unemployed",
+                s1Title: "Sign Up", s1Sub: "STEP 1: ABOUT YOU", lName: "Full Name", lBday: "Birthday", lAge: "Age", lSex: "Sex", lEmp: "Employment", s1Id: "Upload Valid ID (Required)", btnNext: "Next Step ❯", btnBack: "❮ Back", btnSubmit: "Submit Profile",
+                s2Title: "Location", s2Sub: "STEP 2: YOUR LOCATION", lResAdd: "Residential Address", lResAddHint: "Barangay", lStreet: "House No. / Street (optional)", s2Pin: "📍 Pin on Map", lPermAdd: "Permanent Address", s2Copy: "Copy Address", s2SameAdd: "Same Address as Residential", s2Phone: "Contact Number (Verification Required)", s2SendOtp: "Send OTP SMS", s2EnterOtp: "Enter 6-Digit Code", s2ChangeNum: "Change Number", s2Verify: "Verify Code", s2Success: "Number Verified Successfully!", s2Brgy: "Barangay (Searchable)", s2SelBrgy: "Select Barangay...", s2SearchBrgy: "Search 86 Barangays...", s2Purok: "Select Purok", lPurok: "Purok",
+                s3Title: "Security", s3Sub: "STEP 3: HOUSEHOLD & SECURITY", s3Fam: "Total people living here:", s3Preg: "Pregnant women (leave blank if none):", s3Kid: "Kids (1-12):", s3Inf: "Infants (0-1):", s3Pwd: "Are there any PWD in your family?", s3Pin: "Create a 4-to-6 Digit PIN", s3PinDesc: "Required for verifying identity.",
+                rightTitle: "Welcome to the AMPING<br>digital network", rightSub: "Register securely and connect with your local community responders.",
+                mapTitle: "Pin Your Location", mapSearch: "Search for a Barangay or place...", mapSel: "Selected Address:", mapDesc: "Click anywhere on the map, or search above to pin your location.", mapBtn: "Confirm Location",
+                alertNotice: "Notice", alertOk: "OK", alertErr1: "Please complete Full Name, Birthday Year, and Sex.", alertErr2: "Please select your Barangay.", alertErr3: "Please verify your Contact Number using the OTP SMS before proceeding.", alertErr4: "Location pinned! Please select your Barangay from the dropdown.", alertErr5: "Please enter a valid 10-digit phone number.", alertErr6: "Error sending SMS. Please check your Firebase Project Config.", alertErr7: "Please enter the 6-digit code.", alertErr8: "Invalid or expired code. Please try again.",
+                otpSending: "Sending...", otpChecking: "Checking number...", otpVerifying: "Verifying...", otpResend: "Resend code", otpResendIn: "Resend code in", otpSentTo: "Code sent to", otpErrInvalid: "Incorrect code. Please check the SMS and try again.", otpErrExpired: "This code has expired. Please tap Resend code.", otpErrTooMany: "Too many attempts. Please wait a few minutes and try again.", otpErrNetwork: "No internet connection. Please check your signal and try again.", otpErrCaptcha: "Security check failed. Please try again.",
+                submitting: "Submitting...", errPin: "PIN must be 4 to 6 digits (numbers only).", errFamily: "Please enter the total number of people living in your home (at least 1).", errCounts: "Pregnant, kids and infants must be 0 or more and cannot exceed the total number of people.", errId: "Please upload a photo of your ID.", errSession: "Your phone verification has expired. Please verify your number again.", errOffline: "No internet connection. Please connect and tap Submit again.", errSave: "Could not save your registration. Please try again.",
+                doneTitle: "Registration Complete!", doneSub: "Use this username and PIN to sign in to the AMPING Mesh app.", doneUserLbl: "YOUR USERNAME", donePinLbl: "YOUR PIN", doneName: "Name", donePhone: "Mobile", doneBrgy: "Barangay", donePin: "Keep your username and PIN safe. Never share your PIN or this image — LGU staff will never ask for your PIN.", doneSave: "📥 Save as Image", doneCopy: "Copy", doneCopied: "Copied!", doneIssued: "Registered on", errPhoneUsed: "This mobile number is already registered{u}. Each number can only be used once.", pwdHow: "How many PWDs?", pwdKind: "Specify kind of PWD", errPwd: "Please enter how many PWDs live in your home (at least 1, not more than the total)."
+            },
+            ceb: {
+                welcTitle: "Pagrehistro sa Mesh", welcSub: "Paghimo og luwas nga account aron maka-konekta sa mga LGU Responders ug sa komunidad.", welcBtn: "Sugdi ang Pagrehistro ❯",
+                resTitle: "Nagpuyo ba ka dinhi?", resSub: "Aron dali ka matultulan sa mga rescuers, permanente ba ka nga nagpuyo sa Butuan City?",
+                resYes: "Oo, dinhi ko nagpuyo", resNo: "Wala, nibisita lang ko",
+                statTitle: "Unsa ang imong estado?", statSub: "Palihug sultihi mi sa imong estado aron makabalo mi unsa nga ID ang pangayuon.",
+                btnStud: "Estudyante", btnEmp: "Naay Trabaho", btnSen: "Senior", btnUnemp: "Walay Trabaho",
+                s1Title: "Pag-Sign Up", s1Sub: "STEP 1: BAHIN KANIMO", lName: "Tibuok Ngalan", lBday: "Natawhan", lAge: "Edad", lSex: "Kinatawo", lEmp: "Trabaho", s1Id: "I-upload ang Valid ID (Kinahanglan)", btnNext: "Sunod ❯", btnBack: "❮ Balik", btnSubmit: "I-submit ang Profile",
+                s2Title: "Lokasyon", s2Sub: "STEP 2: IMONG LOKASYON", lResAdd: "Residensyal nga Address", lResAddHint: "Barangay", lStreet: "Numero sa Balay / Kalsada (opsyonal)", s2Pin: "📍 I-Pin sa Mapa", lPermAdd: "Permanenteng Address", s2Copy: "Kopyaha ang Address", s2SameAdd: "Parehas sa Residensyal", s2Phone: "Numero sa Cellphone (Kinahanglan I-verify)", s2SendOtp: "Ipadala ang OTP SMS", s2EnterOtp: "Ibutang ang 6-Digit Code", s2ChangeNum: "Ilisi ang Numero", s2Verify: "I-verify", s2Success: "Na-verify na ang Numero!", s2Brgy: "Barangay (Pangitaa)", s2SelBrgy: "Pagpili og Barangay...", s2SearchBrgy: "Pangitaa ang 86 ka Barangay...", s2Purok: "Pagpili og Purok", lPurok: "Purok",
+                s3Title: "Seguridad", s3Sub: "STEP 3: PAMILYA UG SEGURIDAD", s3Fam: "Gidaghanon sa nagpuyo dinhi:", s3Preg: "Mabdos (pasagdi kung wala):", s3Kid: "Bata (1-12):", s3Inf: "Masuso (0-1):", s3Pwd: "Naa bay PWD sa pamilya?", s3Pin: "Paghimo og 4-hantod-6 Digit nga PIN", s3PinDesc: "Kinahanglan aron ma-verify ang pagkatawo.",
+                rightTitle: "Welcome sa AMPING<br>digital network", rightSub: "Luwas nga pagrehistro ug pagkonekta sa mga responders sa inyong komunidad.",
+                mapTitle: "I-Pin ang Imong Lokasyon", mapSearch: "Pangita og Barangay o lugar...", mapSel: "Napili nga Address:", mapDesc: "I-klik bisan asa sa mapa, o mangita sa taas.", mapBtn: "Kumpirmaha ang Lokasyon",
+                alertNotice: "Pahibalo", alertOk: "OK", alertErr1: "Palihug kumpletoha ang Tibuok Ngalan, Tuig sa Natawhan, ug Kinatawo.", alertErr2: "Palihug pagpili og Barangay.", alertErr3: "Palihug i-verify ang imong Numero gamit ang OTP SMS una magpadayon.", alertErr4: "Na-pin na! Palihug pagpili og Barangay gikan sa listahan.", alertErr5: "Palihug ibutang ang saktong 10-digit nga numero.", alertErr6: "Error sa pagpadala. I-check ang Firebase Config.", alertErr7: "Ibutang ang 6-digit nga code.", alertErr8: "Sayop o expired nga code.",
+                otpSending: "Gipadala...", otpChecking: "Gisusi ang numero...", otpVerifying: "Gi-verify...", otpResend: "Ipadala pag-usab ang code", otpResendIn: "Ipadala pag-usab sa", otpSentTo: "Gipadala ang code sa", otpErrInvalid: "Sayop nga code. Palihug susiha ang SMS ug sulayi pag-usab.", otpErrExpired: "Expired na kini nga code. Palihug i-tap ang Ipadala pag-usab.", otpErrTooMany: "Daghan kaayong pagsulay. Palihug hulat og pipila ka minuto.", otpErrNetwork: "Walay internet. Palihug susiha ang imong signal ug sulayi pag-usab.", otpErrCaptcha: "Napakyas ang security check. Palihug sulayi pag-usab.",
+                submitting: "Gi-submit...", errPin: "Ang PIN kinahanglan 4 hangtod 6 ka numero.", errFamily: "Palihug ibutang ang gidaghanon sa nagpuyo sa inyong balay (labing menos 1).", errCounts: "Ang mabdos, bata ug masuso kinahanglan 0 pataas ug dili molapas sa kinatibuk-ang gidaghanon.", errId: "Palihug i-upload ang litrato sa imong ID.", errSession: "Na-expire na ang pag-verify sa imong numero. Palihug i-verify pag-usab.", errOffline: "Walay internet. Palihug pag-connect ug i-tap pag-usab ang Submit.", errSave: "Wala ma-save ang imong pagrehistro. Palihug sulayi pag-usab.",
+                doneTitle: "Kompleto na ang Pagrehistro!", doneSub: "Gamita kini nga username ug PIN sa pag-sign in sa AMPING Mesh app.", doneUserLbl: "IMONG USERNAME", donePinLbl: "IMONG PIN", doneName: "Ngalan", donePhone: "Numero", doneBrgy: "Barangay", donePin: "Tipigi og maayo ang imong username ug PIN. Ayaw ipakita ang imong PIN o kini nga litrato bisan kinsa — ang LGU dili gayud mangayo sa imong PIN.", doneSave: "📥 I-save isip Litrato", doneCopy: "Kopyaha", doneCopied: "Nakopya!", doneIssued: "Narehistro niadtong", errPhoneUsed: "Narehistro na kini nga numero{u}. Usa ra ka higayon magamit ang matag numero.", pwdHow: "Pila ka PWD?", pwdKind: "Ibutang ang klase sa PWD", errPwd: "Palihug ibutang pila ka PWD ang nagpuyo sa inyong balay (labing menos 1, dili molapas sa kinatibuk-an)."
+            },
+            tl: {
+                welcTitle: "Pagrehistro sa Mesh", welcSub: "Gumawa ng ligtas na account upang makakonekta sa LGU Responders at komunidad.", welcBtn: "Simulan ang Pagrehistro ❯",
+                resTitle: "Dito ka ba nakatira?", resSub: "Upang madali kang mahanap ng mga rescuers, permanente ka bang nakatira sa Butuan City?",
+                resYes: "Opo, dito ako nakatira", resNo: "Hindi, bumibisita lang",
+                statTitle: "Ano ang iyong katayuan?", statSub: "Pakisabi sa amin ang iyong katayuan upang malaman namin kung anong ID ang hihingiin.",
+                btnStud: "Estudyante", btnEmp: "May Trabaho", btnSen: "Senior", btnUnemp: "Walang Trabaho",
+                s1Title: "Mag-Sign Up", s1Sub: "STEP 1: TUNGKOL SA IYO", lName: "Buong Pangalan", lBday: "Kaarawan", lAge: "Edad", lSex: "Kasarian", lEmp: "Trabaho", s1Id: "I-upload ang Valid ID (Kailangan)", btnNext: "Susunod ❯", btnBack: "❮ Bumalik", btnSubmit: "I-submit ang Profile",
+                s2Title: "Lokasyon", s2Sub: "STEP 2: IYONG LOKASYON", lResAdd: "Kasalukuyang Tirahan", lResAddHint: "Barangay", lStreet: "Numero ng Bahay / Kalye (opsyonal)", s2Pin: "📍 I-Pin sa Mapa", lPermAdd: "Permanenteng Tirahan", s2Copy: "Kopyahin ang Address", s2SameAdd: "Pareho sa Kasalukuyan", s2Phone: "Numero ng Cellphone (Kailangang I-verify)", s2SendOtp: "Ipadala ang OTP SMS", s2EnterOtp: "Ilagay ang 6-Digit Code", s2ChangeNum: "Palitan ang Numero", s2Verify: "I-verify", s2Success: "Na-verify na ang Numero!", s2Brgy: "Barangay (Maaaring Hanapin)", s2SelBrgy: "Pumili ng Barangay...", s2SearchBrgy: "Hanapin ang 86 na Barangay...", s2Purok: "Pumili ng Purok", lPurok: "Purok",
+                s3Title: "Seguridad", s3Sub: "STEP 3: PAMILYA AT SEGURIDAD", s3Fam: "Kabuuang bilang ng nakatira dito:", s3Preg: "Buntis (iwanang walang laman kung wala):", s3Kid: "Bata (1-12):", s3Inf: "Sanggol (0-1):", s3Pwd: "May PWD ba sa inyong pamilya?", s3Pin: "Gumawa ng 4-hanggang-6 Digit PIN", s3PinDesc: "Kailangan upang patunayan ang pagkakakilanlan.",
+                rightTitle: "Welcome sa AMPING<br>digital network", rightSub: "Ligtas na magrehistro at makipag-ugnayan sa inyong komunidad.",
+                mapTitle: "I-Pin ang Iyong Lokasyon", mapSearch: "Maghanap ng Barangay o lugar...", mapSel: "Napiling Address:", mapDesc: "I-click kahit saan sa mapa, o maghanap sa itaas.", mapBtn: "Kumpirmahin ang Lokasyon",
+                alertNotice: "Paunawa", alertOk: "OK", alertErr1: "Pakikumpleto ang Buong Pangalan, Taon ng Kaarawan, at Kasarian.", alertErr2: "Pakipili ang iyong Barangay.", alertErr3: "Paki-verify ang iyong Numero gamit ang OTP SMS bago magpatuloy.", alertErr4: "Na-pin na! Mangyaring pumili ng Barangay mula sa listahan.", alertErr5: "Pakilagay ang tamang 10-digit na numero.", alertErr6: "Error sa pagpapadala. Pakisuri ang Firebase Config.", alertErr7: "Pakilagay ang 6-digit na code.", alertErr8: "Mali o expired na ang code.",
+                otpSending: "Ipinapadala...", otpChecking: "Sinusuri ang numero...", otpVerifying: "Vine-verify...", otpResend: "Ipadala muli ang code", otpResendIn: "Ipadala muli sa", otpSentTo: "Naipadala ang code sa", otpErrInvalid: "Maling code. Pakisuri ang SMS at subukan muli.", otpErrExpired: "Expired na ang code na ito. Paki-tap ang Ipadala muli.", otpErrTooMany: "Masyadong maraming pagsubok. Maghintay ng ilang minuto.", otpErrNetwork: "Walang internet. Pakisuri ang signal at subukan muli.", otpErrCaptcha: "Nabigo ang security check. Pakisubukan muli.",
+                submitting: "Isinusumite...", errPin: "Ang PIN ay dapat 4 hanggang 6 na numero.", errFamily: "Pakilagay ang kabuuang bilang ng nakatira sa inyong bahay (hindi bababa sa 1).", errCounts: "Ang buntis, bata at sanggol ay dapat 0 o higit pa at hindi lalampas sa kabuuang bilang.", errId: "Paki-upload ang litrato ng iyong ID.", errSession: "Nag-expire na ang pag-verify ng iyong numero. Paki-verify muli.", errOffline: "Walang internet. Kumonekta at i-tap muli ang Submit.", errSave: "Hindi na-save ang iyong pagrehistro. Pakisubukan muli.",
+                doneTitle: "Kumpleto na ang Pagrehistro!", doneSub: "Gamitin ang username at PIN na ito sa pag-sign in sa AMPING Mesh app.", doneUserLbl: "IYONG USERNAME", donePinLbl: "IYONG PIN", doneName: "Pangalan", donePhone: "Numero", doneBrgy: "Barangay", donePin: "Ingatan ang iyong username at PIN. Huwag ibahagi ang iyong PIN o ang larawang ito kaninuman — hindi kailanman hihingin ng LGU ang iyong PIN.", doneSave: "📥 I-save bilang Larawan", doneCopy: "Kopyahin", doneCopied: "Nakopya!", doneIssued: "Nairehistro noong", errPhoneUsed: "Nakarehistro na ang numerong ito{u}. Isang beses lang magagamit ang bawat numero.", pwdHow: "Ilang PWD?", pwdKind: "Tukuyin ang klase ng PWD", errPwd: "Pakilagay kung ilang PWD ang nakatira sa inyong bahay (hindi bababa sa 1, hindi lalampas sa kabuuan)."
+            }
+        };
+
+        function getLang() {
+            try { const l = localStorage.getItem('meshLang'); return langDict[l] ? l : 'en'; } catch (e) { return window.__meshLang || 'en'; }
+        }
+        function getTrans(key) {
+            const lang = getLang();
+            return langDict[lang][key] || langDict['en'][key];
+        }
+
+        function applyTranslations() {
+            document.querySelectorAll('[data-i18n]').forEach(el => {
+                const key = el.getAttribute('data-i18n');
+                if (getTrans(key)) el.innerHTML = getTrans(key); // innerHTML allows <br> tags
+            });
+            document.querySelectorAll('[data-i18n-placeholder]').forEach(el => {
+                const key = el.getAttribute('data-i18n-placeholder');
+                if (getTrans(key)) el.placeholder = getTrans(key);
+            });
+
+            // Re-apply dynamic labels that depend on state
+            if(document.getElementById('regStatus')) updateIdLabel();
+        }
+
+        let authBusy = false;
+        function scrollAuthTop() { const bg = document.getElementById('authOverlay'); if (bg) bg.scrollTo({ top: 0, behavior: 'smooth' }); }
+
+        function toggleAuth(viewId) {
+            if (authBusy) return;
+            const currentView = document.querySelector('.layout-left > div:not(.hidden)');
+            const newView = document.getElementById(viewId);
+
+            if (currentView && currentView.id !== viewId) {
+                authBusy = true;
+                scrollAuthTop();
+                const currentCard = currentView.querySelector('.reg-glass-card') || currentView;
+                const newCard = newView.querySelector('.reg-glass-card') || newView;
+
+                currentCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+                currentCard.style.opacity = '0';
+                currentCard.style.transform = 'translateY(15px) scale(0.98)';
+
+                setTimeout(() => {
+                    currentView.classList.add('hidden');
+                    newCard.style.transition = 'none';
+                    newCard.style.opacity = '0';
+                    newCard.style.transform = 'translateY(15px) scale(0.98)';
+                    newView.classList.remove('hidden');
+
+                    void newCard.offsetWidth;
+
+                    newCard.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                    newCard.style.opacity = '1';
+                    newCard.style.transform = 'translateY(0) scale(1)';
+                    authBusy = false;
+                }, 300);
+            } else {
+                newView.classList.remove('hidden');
+            }
+        }
+
+        function saveLanguage(lang) {
+            window.__meshLang = lang;
+            try { localStorage.setItem('meshLang', lang); } catch (e) {}
+            document.querySelector('.app-layout-wrapper').classList.add('is-split');
+
+            const langView = document.getElementById('languageForm');
+            const langCard = langView.querySelector('.reg-glass-card') || langView;
+            langCard.style.transition = 'opacity 0.3s ease, transform 0.3s ease';
+            langCard.style.opacity = '0';
+            langCard.style.transform = 'translateY(15px) scale(0.98)';
+
+            setTimeout(() => {
+                langView.classList.add('hidden');
+                const welcomeView = document.getElementById('welcomeForm');
+                const welcomeCard = welcomeView.querySelector('.reg-glass-card') || welcomeView;
+
+                welcomeCard.style.transition = 'none';
+                welcomeCard.style.opacity = '0';
+                welcomeCard.style.transform = 'translateY(15px) scale(0.98)';
+                welcomeView.classList.remove('hidden');
+
+                void welcomeCard.offsetWidth;
+
+                welcomeCard.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                welcomeCard.style.opacity = '1';
+                welcomeCard.style.transform = 'translateY(0) scale(1)';
+
+                applyTranslations();
+            }, 700);
+        }
+
+        function proceedToStatusCheck(isResident) {
+            document.getElementById('regIsResident').value = isResident;
+            toggleAuth('statusCheckForm');
+        }
+
+        function proceedToRegistrationForm(status) {
+            document.getElementById('regStatus').value = status;
+            updateIdLabel();
+            toggleAuth('setupProfileStep1');
+        }
+
+        function validateStep1() {
+            const name = document.getElementById('regFirstName').value.trim();
+            const last = document.getElementById('regLastName').value.trim();
+            const bdayY = document.getElementById('regBdayYear').value;
+            const gender = document.getElementById('regGender').value;
+            if (!name || !last || !bdayY || bdayY.length < 4 || !gender || !document.getElementById('regAge').value) {
+                alert(getTrans('alertErr1')); return;
+            }
+            if (!document.getElementById('regIdUpload').files[0]) { alert(getTrans('errId')); return; }
+            // Warm up the invisible reCAPTCHA while the user fills in the address, so Send OTP is instant
+            try { initRecaptcha(); } catch (e) { console.error("reCAPTCHA init error:", e); }
+            toggleAuth('setupProfileStep2');
+        }
+
+        function validateStep2() {
+            const brgy = document.getElementById('regBarangay').value; 
+            
+            if (!brgy) { alert(getTrans('alertErr2')); return; }
+            if (!isPhoneVerified) { alert(getTrans('alertErr3')); return; }
+
+            toggleAuth('setupProfileStep3');
+        }
+
+        function updateIdLabel() {
+            const status = document.getElementById('regStatus').value;
+            const label = document.getElementById('regIdLabel');
+            label.innerText = (status === 'Student' ? "Upload School ID" : "Upload Valid ID") + " (Required)";
+        }
+
+        // Real calendar date or null (rejects 31 Feb, day 45, etc.)
+        function parseBday(y, m, d) {
+            const Y = Number(y), M = Number(m), D = Number(d);
+            if (!Y || !M || !D || String(y).length !== 4) return null;
+            const dt = new Date(Y, M - 1, D);
+            return (dt.getFullYear() === Y && dt.getMonth() === M - 1 && dt.getDate() === D) ? dt : null;
+        }
+        function ageFromDate(dt) {
+            const today = new Date();
+            let age = today.getFullYear() - dt.getFullYear();
+            if (today.getMonth() < dt.getMonth() || (today.getMonth() === dt.getMonth() && today.getDate() < dt.getDate())) age--;
+            return age;
+        }
+
+        function calculateAgeDrop() {
+            const m = document.getElementById('regBdayMonth').value;
+            const d = document.getElementById('regBdayDay').value;
+            const y = document.getElementById('regBdayYear').value;
+
+            if (m && d && y && y.length === 4) {
+                const bday = parseBday(y, m, d);
+                if (!bday) {
+                    document.getElementById('regAge').value = "";
+                    return;   // e.g. 31 Feb: no age yet; the Next button stays hidden until the date is real
+                }
+                const age = ageFromDate(bday);
+
+                // Limit age to be between 12 and 120
+                if (age < 12 || age > 120) {
+                    alert("You must be at least 12 years old to register an account.");
+                    document.getElementById('regBdayYear').value = ""; // Reset the invalid year
+                    document.getElementById('regAge').value = "";      // Clear the age box
+                } else {
+                    document.getElementById('regAge').value = age;     // Set valid age
+                }
+            } else {
+                document.getElementById('regAge').value = "";          // Clear if input is incomplete
+            }
+        }
+
+        // ==========================
+        // 4. SUBMIT PROFILE (username = verified mobile number)
+        // ==========================
+        // Saved to the Realtime Database, in the exact shape the AMPING Mesh app (raspberrypi-index) reads:
+        //   meshaccounts/{uid}         → the account: username = full name, loginUsername = 09XXXXXXXXX, pin,
+        //                                contact = +63XXXXXXXXXX, role 'user' + status 'pending' (awaits Barangay approval),
+        //                                bday, employmentStatus, familyCount…, pwdCount/pwdType, idPhoto, lat/lng, submissionTime
+        //   meshphones/{+63XXXXXXXXXX} → uid   (locks the number, so it can only be registered once)
+        // The Mesh app signs people in by comparing username/number + PIN with meshaccounts, so the PIN is stored the
+        // same way the app stores it; a hashed PIN would make the account impossible to log into.
+        let profileSaving = false;
+
+        // "+639171234567" → "09171234567" (the 11-digit username)
+        function phoneToLoginName(e164) { return '0' + String(e164 || '').replace(/^\+63/, ''); }
+
+        function phoneUsedError(username) {
+            const e = new Error('Phone already registered');
+            e.code = 'phone-used';
+            e.username = username || '';
+            return e;
+        }
+
+        // Finds an account already using this number: new registrations (meshphones) AND older accounts made in the app
+        async function findPhoneOwner(db, phone) {
+            const local = phoneToLoginName(phone);
+            const idx = await db.ref('meshphones/' + phone).once('value');
+            if (idx.exists()) return { uid: idx.val(), username: local };
+            const accounts = db.ref('meshaccounts');
+            const found = await Promise.all([
+                accounts.orderByChild('contact').equalTo(phone).limitToFirst(1).once('value'),
+                accounts.orderByChild('contact').equalTo(local).limitToFirst(1).once('value'),
+                accounts.orderByChild('loginUsername').equalTo(local).limitToFirst(1).once('value')
+            ]);
+            for (const snap of found) {
+                if (snap.exists()) {
+                    let key = null;
+                    snap.forEach((child) => { key = child.key; return true; });
+                    return { uid: key, username: local };
+                }
+            }
+            return null;
+        }
+
+        async function registerAccount(db, uid, phone, account) {
+            const loginUsername = phoneToLoginName(phone);
+            if ((await db.ref('meshaccounts/' + uid).once('value')).exists()) throw phoneUsedError(loginUsername);
+            const owner = await findPhoneOwner(db, phone);
+            if (owner && owner.uid !== uid) throw phoneUsedError(loginUsername);
+
+            // Lock the number first — a transaction, so two people submitting at the same moment can't both win
+            const tx = await db.ref('meshphones/' + phone).transaction((cur) => (cur === null || cur === uid) ? uid : undefined);
+            if (!tx.committed) throw phoneUsedError(loginUsername);
+
+            await db.ref('meshaccounts/' + uid).set(Object.assign({}, account, { loginUsername: loginUsername }));
+            return loginUsername;
+        }
+
+        // Returns null if the number is free, otherwise { username }
+        async function findExistingRegistration(uid, phone) {
+            const db = firebase.database();
+            const mine = await db.ref('meshaccounts/' + uid).once('value');
+            if (mine.exists()) return { username: (mine.val() && mine.val().loginUsername) || phoneToLoginName(phone) };
+            const owner = await findPhoneOwner(db, phone);
+            if (owner && owner.uid !== uid) return { username: owner.username };
+            return null;
+        }
+
+        function phoneUsedText(username) {
+            return getTrans('errPhoneUsed').replace('{u}', username ? ' (' + username + ')' : '');
+        }
+
+        // Shrinks the ID photo to ≤800px JPEG (~50–100 KB). The Mesh app keeps idPhoto inside each account and
+        // every device downloads the whole account list, so the photo has to stay small.
+        function compressIdImage(file) {
+            return new Promise((resolve) => {
+                if (!file) return resolve(null);
+                const url = URL.createObjectURL(file);
+                const img = new Image();
+                img.onload = () => {
+                    const scale = Math.min(1, 800 / Math.max(img.width, img.height));
+                    const cv = document.createElement('canvas');
+                    cv.width = Math.round(img.width * scale);
+                    cv.height = Math.round(img.height * scale);
+                    cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+                    URL.revokeObjectURL(url);
+                    resolve(cv.toDataURL('image/jpeg', 0.6));
+                };
+                img.onerror = () => { URL.revokeObjectURL(url); resolve(null); };
+                img.src = url;
+            });
+        }
+
+       // ==========================
+        // STEP 3: FAMILY MEMBER MODAL UI
+        // ==========================
+        let familyMembersList = [];
+        let editingFamIndex = -1; // Tracks if we are editing an existing card or adding a new one
+
+        // Auto-selects sex based on Relation
+        function autoSelectFamSex() {
+            const rel = document.getElementById('fmRel').value;
+            const sexSelect = document.getElementById('fmSex');
+
+            if (rel === 'Son') {
+                sexSelect.value = 'Male';
+            } else if (rel === 'Daughter') {
+                sexSelect.value = 'Female';
+            }
+        }
+
+        function calcFamAgeModal() {
+            const m = document.getElementById('fmBdayMonth').value;
+            const d = document.getElementById('fmBdayDay').value.trim();
+            const y = document.getElementById('fmBdayYear').value;
+
+            const b = (m && d && y.length === 4) ? parseBday(y, m, d) : null;
+            if (b) {
+                const age = ageFromDate(b);
+                document.getElementById('fmAge').value = age >= 0 ? age : 0;
+            } else {
+                document.getElementById('fmAge').value = "";
+            }
+        }
+
+        function openFamModal() {
+            editingFamIndex = -1; // Reset to ensure we are adding a NEW member
+
+            // Clear all fields for a fresh modal
+            document.getElementById('fmFirstName').value = '';
+            document.getElementById('fmMiddleName').value = '';
+            document.getElementById('fmLastName').value = '';
+            document.getElementById('fmExtName').value = '';
+            document.getElementById('fmRel').value = '';
+            document.getElementById('fmSex').value = 'Male';
+            document.getElementById('fmBdayMonth').value = '';
+            document.getElementById('fmBdayDay').value = '';
+            document.getElementById('fmBdayYear').value = '';
+            document.getElementById('fmAge').value = '';
+            document.getElementById('fmEdu').value = '';
+            document.getElementById('fmOcc').value = '';
+            document.getElementById('fmRem').value = '';
+            document.getElementById('famModalOverlay').classList.add('active');
+        }
+
+        // Opens the modal and pre-fills it with existing data for editing
+        function editFamMember(index) {
+            editingFamIndex = index; // Set the tracker so the system knows we are updating!
+            const fm = familyMembersList[index];
+
+            document.getElementById('fmFirstName').value = fm.firstName || '';
+            document.getElementById('fmMiddleName').value = fm.middleName || '';
+            document.getElementById('fmLastName').value = fm.lastName || '';
+            document.getElementById('fmExtName').value = fm.extName || '';
+            document.getElementById('fmRel').value = fm.relation;
+            document.getElementById('fmSex').value = fm.sex;
+
+            // Re-split the birthdate so it fills the 3 dropdowns perfectly
+            if (fm.birthdate) {
+                const parts = fm.birthdate.split('-');
+                if (parts.length === 3) {
+                    document.getElementById('fmBdayYear').value = parts[0];
+                    document.getElementById('fmBdayMonth').value = parts[1];
+                    document.getElementById('fmBdayDay').value = parts[2];
+                }
+            }
+
+            document.getElementById('fmAge').value = fm.age;
+            document.getElementById('fmEdu').value = fm.education;
+            document.getElementById('fmOcc').value = fm.occupation;
+            document.getElementById('fmRem').value = fm.remarks;
+
+            document.getElementById('famModalOverlay').classList.add('active');
+        }
+
+        function closeFamModal() {
+            document.getElementById('famModalOverlay').classList.remove('active');
+            editingFamIndex = -1; // Reset on close
+        }
+
+        function saveFamModal() {
+            const fName = document.getElementById('fmFirstName').value.trim();
+            const mName = document.getElementById('fmMiddleName').value.trim();
+            const lName = document.getElementById('fmLastName').value.trim();
+            const eName = document.getElementById('fmExtName').value.trim();
+
+            const relation = document.getElementById('fmRel').value;
+            const m = document.getElementById('fmBdayMonth').value;
+            const d = document.getElementById('fmBdayDay').value.trim();
+            const y = document.getElementById('fmBdayYear').value;
+            const edu = document.getElementById('fmEdu').value;
+            const occ = document.getElementById('fmOcc').value;
+
+            // Strictly require First Name, Surname, and all other mandatory dropdowns
+            if (!fName || !lName || !relation || !m || !d || !y || y.length < 4 || !edu || !occ) {
+                alert("Please complete the First Name, Surname, Relation, Full Birthdate, Education, and Occupation fields.");
+                return;
+            }
+            if (!parseBday(y, m, d)) { alert("Please enter a valid birthdate."); return; }
+
+            // Join the names nicely for the summary card UI
+            const combinedName = [fName, mName, lName, eName].filter(Boolean).join(' ');
+
+            const memberData = {
+                name: combinedName, // Used for the visual yellow card
+                firstName: fName,
+                middleName: mName,
+                lastName: lName,
+                extName: eName,
+                relation: relation,
+                sex: document.getElementById('fmSex').value,
+                birthdate: `${y}-${m}-${d.padStart(2, '0')}`,
+                age: document.getElementById('fmAge').value,
+                education: edu,
+                occupation: occ,
+                remarks: document.getElementById('fmRem').value.trim()
+            };
+
+            // If we opened the modal by clicking an existing card, UPDATE it. Otherwise, ADD it.
+            if (editingFamIndex >= 0) {
+                familyMembersList[editingFamIndex] = memberData;
+                editingFamIndex = -1;
+            } else {
+                familyMembersList.push(memberData);
+            }
+
+            renderFamList();
+            closeFamModal();
+        }
+
+        function removeFamMember(index) {
+            familyMembersList.splice(index, 1);
+            renderFamList();
+        }
+
+        function escHtml(t) {
+            return String(t == null ? '' : t).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+        }
+
+        function renderFamList() {
+            const container = document.getElementById('familyMembersContainer');
+            container.innerHTML = '';
+            familyMembersList.forEach((fm, index) => {
+                const div = document.createElement('div');
+                div.style.cssText = 'background: #fffbeb; border: 1px solid #fcd34d; padding: 10px 14px; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; text-align: left; transition: all 0.2s ease; word-break: break-word;';
+
+                // Add a hover effect to show it's clickable
+                div.onmouseover = function() { this.style.filter = 'brightness(0.95)'; };
+                div.onmouseout = function() { this.style.filter = 'brightness(1)'; };
+
+                div.innerHTML = `
+                    <div style="flex: 1; cursor: pointer;" onclick="editFamMember(${index})">
+                        <strong style="color: #d97706; font-size: 13px; display: block; margin-bottom: 2px;">${escHtml(fm.name)}</strong>
+                        <span style="color: #92400e; font-size: 11px;">${escHtml(fm.relation)} • ${fm.age ? escHtml(fm.age) + ' yrs' : '-'} • ${escHtml(fm.sex)}</span>
+                    </div>
+                    <span style="color: #ef4444; font-weight: bold; cursor: pointer; font-size: 24px; line-height: 1; padding: 6px 4px 6px 15px;" onclick="removeFamMember(${index})">&times;</span>
+                `;
+                container.appendChild(div);
+            });
+        }
+
+        // ==========================
+        // STEP 3: HOF TOGGLE UI
+        // ==========================
+        function toggleHof(selection) {
+            document.getElementById('regIsHof').value = selection;
+            const btnYes = document.getElementById('btnHofYes');
+            const btnNo = document.getElementById('btnHofNo');
+            const yesSec = document.getElementById('hofYesSection');
+            const noSec = document.getElementById('hofNoSection');
+            const countSec = document.getElementById('householdCountsSection');
+
+            // Show base household counts and submit button
+            countSec.classList.remove('hidden');
+
+            if (selection === 'yes') {
+                btnYes.style.setProperty('background', '#d97706', 'important');
+                btnYes.style.setProperty('color', 'white', 'important');
+                btnNo.style.setProperty('background', '#ffffff', 'important');
+                btnNo.style.setProperty('color', '#4b5563', 'important');
+
+                yesSec.classList.remove('hidden');
+                noSec.classList.add('hidden');
+            } else {
+                btnNo.style.setProperty('background', '#0072ff', 'important');
+                btnNo.style.setProperty('color', 'white', 'important');
+                btnYes.style.setProperty('background', '#ffffff', 'important');
+                btnYes.style.setProperty('color', '#4b5563', 'important');
+
+                noSec.classList.remove('hidden');
+                yesSec.classList.add('hidden');
+            }
+        } // <- This bracket fixes the crash!
+
+        async function saveProfile() {
+            if (profileSaving) return;
+            const btn = document.getElementById('uiProfBtn');
+            const val = (id) => document.getElementById(id).value.trim();
+            const count = (id) => (val(id) === '' ? 0 : Number(val(id)));
+
+            const total = count('regFamilyCount'), pregnant = count('regPregnantCount');
+            const kids = count('regChildrenCount'), infants = count('regInfantCount');
+            const seniors = count('regSeniorCount'), lactating = count('regLactatingCount');
+            const pin = val('regPin');
+            const isHof = val('regIsHof');
+
+            if (!isHof) { alert("Please select if you are the Head of the Family."); return; }
+            if (isHof === 'no' && val('regHofName') === '') { alert("Please enter the name of your Head of Family."); return; }
+            if (val('regFamilyCount') === '' || !Number.isInteger(total) || total < 1) { alert(getTrans('errFamily')); return; }
+            if ([pregnant, kids, infants].some((n) => !Number.isInteger(n) || n < 0) || pregnant + kids + infants > total) { alert(getTrans('errCounts')); return; }
+            const hasPwd = val('regHasPwd') === 'Yes';
+            const pwdCount = hasPwd ? count('regPwdCount') : 0;
+            if (hasPwd && (!Number.isInteger(pwdCount) || pwdCount < 1 || pwdCount > total)) { alert(getTrans('errPwd')); return; }
+            if (!/^\d{4,6}$/.test(pin)) { alert(getTrans('errPin')); return; }
+            if (!isPhoneVerified) { alert(getTrans('alertErr3')); toggleAuth('setupProfileStep2'); return; }
+
+            let uid = "dev-test-uid";
+            let phone = verifiedPhoneNumber;
+
+            // ==========================================
+            // 🛑 DEVELOPER BYPASS FIX FOR SUBMIT 🛑
+            // ==========================================
+            if (verifiedPhoneNumber !== "+639999999999") {
+                const user = firebase.auth().currentUser;
+                if (!user || !user.phoneNumber) {
+                    isPhoneVerified = false;
+                    document.getElementById('phoneSuccessSection').classList.add('hidden');
+                    document.getElementById('regContact').disabled = false;
+                    resetPhoneAuth();
+                    alert(getTrans('errSession'));
+                    toggleAuth('setupProfileStep2');
+                    return;
+                }
+                if (!navigator.onLine) { alert(getTrans('errOffline')); return; }
+                uid = user.uid;
+                phone = user.phoneNumber;
+            }
+
+            profileSaving = true;
+            btn.disabled = true;
+            btn.innerText = getTrans('submitting');
+
+            try {
+                const db = firebase.database();
+                const m = val('regBdayMonth'), d = val('regBdayDay'), y = val('regBdayYear');
+                const birthday = (m && d && y.length === 4) ? `${y}-${m}-${d.padStart(2, '0')}` : (y || '');
+                document.getElementById('regBirthday').value = birthday;
+
+                const idPhoto = await compressIdImage(document.getElementById('regIdUpload').files[0]);
+
+                // Combine the names into one clean string for the Database
+                const fullCombinedName = [val('regFirstName'), val('regMiddleName'), val('regLastName'), val('regExtName')].filter(Boolean).join(' ');
+
+                // The familyMembersList array is already perfectly managed by the pop-up modal!
+                const familyMembersArray = (isHof === 'yes') ? familyMembersList : [];
+
+                const account = {
+                    id: uid,
+                    username: fullCombinedName,
+                    pin: pin,
+                    contact: phone,
+                    address: residentialAddressText(),
+                    permanentAddress: val('regPermAddress'),
+                    barangay: val('regBarangay'),
+                    purok: val('regPurok'),
+                    permanentPurok: document.getElementById('regPermPurok') ? val('regPermPurok') : '',
+                    role: 'user',
+                    status: 'pending',
+                    isResident: val('regIsResident'),
+                    employmentStatus: val('regStatus'),
+                    sex: val('regGender'),
+                    bday: birthday,
+
+                    // COUNTS
+                    familyCount: total,
+                    pregnantCount: pregnant,
+                    childrenCount: kids,
+                    infantCount: infants,
+                    seniorCount: seniors,
+                    lactatingCount: lactating,
+                    hasPwd: hasPwd ? 'Yes' : 'No',
+                    pwdCount: pwdCount,
+                    pwdType: hasPwd ? val('regPwdType') : '',
+
+                    // --- HEAD OF FAMILY (DAFAC) DATA ---
+                    isHeadOfFamily: isHof,
+                    hofName: isHof === 'no' ? val('regHofName') : '',
+                    hofRelationship: isHof === 'no' ? val('regHofRel') : '',
+                    birthplace: isHof === 'yes' ? val('regBirthplace') : '',
+                    civilStatus: isHof === 'yes' ? val('regCivilStatus') : '',
+                    maidenName: isHof === 'yes' ? val('regMaidenName') : '',
+                    religion: isHof === 'yes' ? val('regReligion') : '',
+                    ethnicity: isHof === 'yes' ? val('regEthnicity') : '',
+                    income: isHof === 'yes' ? val('regIncome') : '',
+                    is4ps: isHof === 'yes' ? val('reg4ps') : '',
+                    familyMembers: familyMembersArray,
+                    // -----------------------------------
+
+                    lang: getLang(),
+                    authProvider: 'phone',
+                    submissionTime: new Date().toLocaleString('en-US', { month: 'short', day: 'numeric', year: 'numeric', hour: '2-digit', minute: '2-digit' }),
+                    registeredAt: Date.now()
+                };
+                if (val('regAge') !== '') account.age = Number(val('regAge'));
+                if (idPhoto) account.idPhoto = idPhoto;
+                if (pickedLatLng) { account.lat = pickedLatLng.lat; account.lng = pickedLatLng.lng; }
+
+                let loginName = "";
+                if (verifiedPhoneNumber === "+639999999999") {
+                    // MOCK DATABASE SAVE FOR TESTING (Prevents Firebase crash!)
+                    loginName = "09999999999";
+                    console.log("Mock Profile Saved:", account);
+                } else {
+                    // REAL DATABASE SAVE
+                    loginName = await registerAccount(db, uid, phone, account);
+                }
+
+                document.getElementById('regPin').value = '';
+                showRegistrationSuccess({ loginName: loginName, pin: pin, fullName: account.username, phone: phone, barangay: account.barangay });
+            } catch (err) {
+                console.error('Save profile error:', err);
+                alert(err && err.code === 'phone-used' ? phoneUsedText(err.username)
+                    : getTrans('errSave') + (err && err.code ? ' (' + err.code + ')' : ''));
+                btn.disabled = false;
+                btn.innerText = getTrans('btnSubmit');
+            } finally {
+                profileSaving = false;
+            }
+        }
+
+        function prettyPhone(e164) {
+            const d = String(e164 || '').replace(/^\+63/, '');
+            return d.length === 10 ? '+63 ' + d.slice(0, 3) + ' ' + d.slice(3, 6) + ' ' + d.slice(6) : e164;
+        }
+
+        function showRegistrationSuccess(profile) {
+            clearDraft();
+            window.__regCard = { username: profile.loginName, pin: profile.pin, fullName: profile.fullName, phone: prettyPhone(profile.phone), barangay: profile.barangay, date: new Date() };
+            document.getElementById('donePinValue').innerText = profile.pin;
+            document.getElementById('doneUsername').innerText = profile.loginName;
+            window.__logoPromise = window.__logoPromise || loadLogoImage();   // warm up, so Save as Image is instant
+            toggleAuth('registrationSuccess');
+        }
+
+        function copyUsername() {
+            const btn = document.getElementById('doneCopyBtn');
+            const text = document.getElementById('doneUsername').innerText;
+            const done = () => { btn.innerText = getTrans('doneCopied'); setTimeout(() => { btn.innerText = getTrans('doneCopy'); }, 1500); };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(text).then(done).catch(() => {});
+            } else {
+                const t = document.createElement('textarea'); t.value = text; document.body.appendChild(t); t.select();
+                try { document.execCommand('copy'); done(); } catch (e) {}
+                t.remove();
+            }
+        }
+
+        function roundRectPath(x, left, top, w, h, r) {
+            x.beginPath();
+            x.moveTo(left + r, top);
+            x.arcTo(left + w, top, left + w, top + h, r);
+            x.arcTo(left + w, top + h, left, top + h, r);
+            x.arcTo(left, top + h, left, top, r);
+            x.arcTo(left, top, left + w, top, r);
+            x.closePath();
+        }
+
+        function fitText(x, text, maxW) {
+            text = String(text || '');
+            if (x.measureText(text).width <= maxW) return text;
+            while (text.length > 1 && x.measureText(text + '…').width > maxW) text = text.slice(0, -1);
+            return text + '…';
+        }
+
+        function wrapLines(x, text, maxW) {
+            const words = String(text).split(' '), lines = [];
+            let line = '';
+            words.forEach((w) => {
+                const test = line ? line + ' ' + w : w;
+                if (x.measureText(test).width > maxW && line) { lines.push(line); line = w; } else { line = test; }
+            });
+            if (line) lines.push(line);
+            return lines;
+        }
+
+        // Draws the credential card on a canvas (no external libraries, no cross-origin images) and saves it as PNG
+        const AMPING_LOGO_URL = 'https://tech2forms.com/wp-content/uploads/2026/08/767242790_2584290141989037_3631061154976649797_n.png';
+
+        // tech2forms.com sends Access-Control-Allow-Origin: *, so the logo can be drawn into the saved PNG
+        function loadLogoImage() {
+            return new Promise((resolve) => {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                img.onload = () => resolve(img);
+                img.onerror = () => resolve(null);
+                setTimeout(() => resolve(null), 8000);
+                img.src = AMPING_LOGO_URL;
+            });
+        }
+
+        async function saveCredentialCard() {
+            const c = window.__regCard;
+            if (!c) return;
+            try { await document.fonts.ready; } catch (e) {}
+            const logo = await (window.__logoPromise || (window.__logoPromise = loadLogoImage()));
+
+            let cv;
+            try {
+                cv = drawCredentialCard(c, logo);
+                cv.toDataURL();                       // throws if the logo made the canvas unreadable
+            } catch (e) {
+                console.warn('Saving card without logo:', e);
+                cv = drawCredentialCard(c, null);
+            }
+            deliverCardImage(cv, c);
+        }
+
+        function drawCredentialCard(c, logo) {
+            const W = 720, H = 850, S = 2;
+            const OFF = logo ? 120 : 0;               // room for the logo above the card content
+            const TH = H + OFF;
+            const cv = document.createElement('canvas');
+            cv.width = W * S; cv.height = TH * S;
+            const x = cv.getContext('2d');
+            x.scale(S, S);
+            const F = (w, px) => `${w} ${px}px Inter, Arial, sans-serif`;
+
+            const bg = x.createLinearGradient(0, 0, W, TH);
+            bg.addColorStop(0, '#daf1fc'); bg.addColorStop(1, '#a2c6f2');
+            x.fillStyle = bg; x.fillRect(0, 0, W, TH);
+
+            roundRectPath(x, 40, 40, W - 80, TH - 80, 28); x.fillStyle = '#ffffff'; x.fill();
+
+            if (logo) {
+                const box = 110, ratio = Math.min(box / logo.naturalWidth, box / logo.naturalHeight);
+                const lw = logo.naturalWidth * ratio, lh = logo.naturalHeight * ratio;
+                x.drawImage(logo, (W - lw) / 2, 64 + (box - lh) / 2, lw, lh);
+                x.translate(0, OFF);
+            }
+
+            x.textAlign = 'center';
+            x.fillStyle = '#0072ff'; x.font = F(800, 18); x.fillText('AMPING DIGITAL NETWORK', W / 2, 105);
+            x.fillStyle = '#0b3b60'; x.font = F(800, 32); x.fillText(getTrans('doneTitle'), W / 2, 152);
+
+            // Username + PIN box
+            roundRectPath(x, 90, 190, W - 180, 260, 20); x.fillStyle = '#eff6ff'; x.fill();
+            x.strokeStyle = '#bfdbfe'; x.lineWidth = 2; x.stroke();
+            x.fillStyle = '#6b7280'; x.font = F(700, 15); x.fillText(getTrans('doneUserLbl'), W / 2, 232);
+            let uSize = 52;
+            x.font = F(900, uSize);
+            while (uSize > 24 && x.measureText(c.username).width > W - 220) { uSize -= 2; x.font = F(900, uSize); }
+            x.fillStyle = '#0072ff'; x.fillText(c.username, W / 2, 290 + uSize / 3);
+
+            x.setLineDash([6, 6]); x.strokeStyle = '#bfdbfe';
+            x.beginPath(); x.moveTo(130, 332); x.lineTo(W - 130, 332); x.stroke();
+            x.setLineDash([]);
+            x.fillStyle = '#6b7280'; x.font = F(700, 15); x.fillText(getTrans('donePinLbl'), W / 2, 368);
+            x.fillStyle = '#0072ff'; x.font = F(900, 46);
+            x.fillText(String(c.pin || '').split('').join(' '), W / 2, 424);
+
+            const rows = [[getTrans('doneName'), c.fullName], [getTrans('doneBrgy'), c.barangay]];
+            let yy = 510;
+            rows.forEach(([label, value]) => {
+                x.textAlign = 'left'; x.fillStyle = '#6b7280'; x.font = F(500, 17); x.fillText(label, 100, yy);
+                x.textAlign = 'right'; x.fillStyle = '#0b3b60'; x.font = F(700, 20); x.fillText(fitText(x, value, 340), W - 100, yy);
+                x.fillStyle = '#f3f4f6'; x.fillRect(100, yy + 20, W - 200, 2);
+                yy += 62;
+            });
+
+            x.font = F(500, 16);
+            const pinLines = wrapLines(x, '🔒 ' + getTrans('donePin'), W - 240);
+            const boxH = 36 + pinLines.length * 24;
+            const boxTop = yy + 4;
+            roundRectPath(x, 90, boxTop, W - 180, boxH, 16); x.fillStyle = '#fffbeb'; x.fill();
+            x.strokeStyle = '#fde68a'; x.stroke();
+            x.textAlign = 'left'; x.fillStyle = '#92400e';
+            pinLines.forEach((ln, i) => x.fillText(ln, 120, boxTop + 30 + i * 24));
+
+            x.textAlign = 'center'; x.fillStyle = '#9ca3af'; x.font = F(500, 14);
+            x.fillText(getTrans('doneIssued') + ' ' + c.date.toLocaleDateString(), W / 2, H - 70);
+            return cv;
+        }
+
+        function deliverCardImage(cv, c) {
+            cv.toBlob(async (blob) => {
+                if (!blob) return;
+                const name = c.username + '.png';
+                const a = document.createElement('a');
+                a.href = URL.createObjectURL(blob);
+                a.download = name;
+                document.body.appendChild(a); a.click(); a.remove();
+                setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+            }, 'image/png');
+        }
+
+        // ==========================
+        // DRAFT AUTOSAVE: survives an accidental reload / closed tab (kept 24 h, removed once registration completes)
+        // The PIN is never stored. Phone verification is restored from Firebase's own saved sign-in.
+        // ==========================
+        const DRAFT_KEY = 'ampingRegDraft_v1';
+        const DRAFT_TTL = 24 * 60 * 60 * 1000;
+        let draftIdData = null, draftIdName = '', draftLastJson = '', draftRestoring = false, draftDisabled = false, draftTimer = null;
+
+        function draftFieldEls() {
+            return [...document.querySelectorAll('#authOverlay input[id^="reg"], #authOverlay select[id^="reg"]')]
+                .filter((el) => el.type !== 'file' && el.id !== 'regPin');
+        }
+
+        function currentViewId() {
+            const v = document.querySelector('.layout-left > div:not(.hidden)');
+            return v ? v.id : 'languageForm';
+        }
+
+        function saveDraft() {
+            if (draftRestoring || draftDisabled) return;
+            try {
+                const fields = {};
+                draftFieldEls().forEach((el) => { fields[el.id] = el.value; });
+                const view = currentViewId();
+                if (view === 'registrationSuccess') return;
+                const data = {
+                    t: 0, view: view,
+                    split: document.querySelector('.app-layout-wrapper').classList.contains('is-split'),
+                    fields: fields, family: familyMembersList, latlng: pickedLatLng,
+                    phoneVerified: !!isPhoneVerified, verifiedPhone: verifiedPhoneNumber,
+                    idData: draftIdData, idName: draftIdName
+                };
+                const json = JSON.stringify(data);
+                if (json === draftLastJson) return;
+                draftLastJson = json;
+                data.t = Date.now();
+                localStorage.setItem(DRAFT_KEY, JSON.stringify(data));
+            } catch (e) { /* storage full / blocked: the form still works, just without autosave */ }
+        }
+
+        function scheduleDraftSave() {
+            clearTimeout(draftTimer);
+            draftTimer = setTimeout(saveDraft, 300);
+        }
+
+        function clearDraft() {
+            draftDisabled = true;
+            try { localStorage.removeItem(DRAFT_KEY); } catch (e) {}
+        }
+
+        function markPhoneVerifiedUI(phone) {
+            isPhoneVerified = true;
+            verifiedPhoneNumber = phone;
+            document.getElementById('phoneInputSection').classList.add('hidden');
+            document.getElementById('otpVerifySection').classList.add('hidden');
+            document.getElementById('phoneSuccessSection').classList.remove('hidden');
+            document.getElementById('regContact').disabled = true;
+        }
+
+        async function restoreDraft() {
+            let d = null;
+            try { d = JSON.parse(localStorage.getItem(DRAFT_KEY) || 'null'); } catch (e) {}
+            if (!d || !d.fields || !d.t || Date.now() - d.t > DRAFT_TTL) { try { localStorage.removeItem(DRAFT_KEY); } catch (e) {} return false; }
+
+            draftRestoring = true;
+            try {
+                const f = d.fields;
+                const set = (id, v) => { const el = document.getElementById(id); if (el && v != null) el.value = v; };
+
+                // barangay first: it decides which puroks exist
+                set('regBarangay', f.regBarangay);
+                if (f.regBarangay) populatePurokOptions(f.regBarangay);
+                Object.keys(f).forEach((id) => { if (id !== 'regBarangay') set(id, f[id]); });
+
+                calculateAgeDrop();
+                if (f.regIsHof) toggleHof(f.regIsHof);
+                document.getElementById('regPwdDetails').style.display = f.regHasPwd === 'Yes' ? 'block' : 'none';
+                if (Array.isArray(d.family)) { familyMembersList = d.family; renderFamList(); }
+                if (d.latlng) pickedLatLng = d.latlng;
+                updateIdLabel();
+
+                // show the screen the user was on
+                if (d.split) document.querySelector('.app-layout-wrapper').classList.add('is-split');
+                if (d.view && document.getElementById(d.view) && d.view !== 'registrationSuccess') {
+                    document.querySelectorAll('.layout-left > div').forEach((el) => el.classList.add('hidden'));
+                    document.getElementById(d.view).classList.remove('hidden');
+                }
+
+                // dev test number
+                if (d.phoneVerified && d.verifiedPhone === '+639999999999') markPhoneVerifiedUI(d.verifiedPhone);
+
+                // real number: Firebase keeps the phone sign-in itself, so only restore if it still matches
+                if (d.phoneVerified && d.verifiedPhone && d.verifiedPhone !== '+639999999999') {
+                    const off = firebase.auth().onAuthStateChanged((u) => {
+                        off();
+                        if (u && u.phoneNumber === d.verifiedPhone) markPhoneVerifiedUI(u.phoneNumber);
+                    });
+                }
+
+                // ID photo (kept as a small JPEG)
+                if (d.idData) {
+                    try {
+                        const blob = await (await fetch(d.idData)).blob();
+                        const file = new File([blob], d.idName || 'id.jpg', { type: blob.type || 'image/jpeg' });
+                        const dt = new DataTransfer(); dt.items.add(file);
+                        document.getElementById('regIdUpload').files = dt.files;
+                        document.getElementById('regIdFileName').innerText = '✅ ' + file.name;
+                        draftIdData = d.idData; draftIdName = file.name;
+                    } catch (e) { console.warn('Could not restore ID photo', e); }
+                }
+                runStepValidation();
+            } finally {
+                draftRestoring = false;
+            }
+            return true;
+        }
+
+        ['input', 'change'].forEach((ev) => document.addEventListener(ev, (e) => {
+            if (draftRestoring) return;
+            if (e.target && e.target.id === 'regIdUpload') {
+                const file = e.target.files[0];
+                if (!file) { draftIdData = null; draftIdName = ''; }
+                else compressIdImage(file).then((data) => { draftIdData = data; draftIdName = file.name; saveDraft(); });
+            }
+            scheduleDraftSave();
+        }));
+        window.addEventListener('pagehide', saveDraft);
+        document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') saveDraft(); });
+        setInterval(saveDraft, 2000);   // catches view changes, family list edits, phone verification
+
+        // Initialize Everything
+        applyTranslations();
+        populateBarangayList();
+        restoreDraft();
+
+        const initCard = document.getElementById('languageForm').querySelector('.reg-glass-card');
+        initCard.style.opacity = '0';
+        setTimeout(() => {
+            initCard.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+            initCard.style.opacity = '1';
+            initCard.style.transform = 'translateY(0) scale(1)';
+        }, 50);
+
+    </script> 
