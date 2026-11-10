@@ -1,0 +1,15 @@
+{
+  "name": "amping-command-center",
+  "version": "1.0.0",
+  "description": "AMPING Mesh - Raspberry Pi command center (web app + API + Firebase mirror + Heltec 1 LoRa bridge)",
+  "main": "amping-server.js",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "scripts": {
+    "start": "node amping-server.js",
+    "test": "node test/run-tests.js && node test/map-tests.js"
+  },
+  "optionalDependencies": {
+    "serialport": "^12.0.0"
+  }
+}
